@@ -21,20 +21,20 @@ jobs:
       
     - name: Terraform Init
       run: |
-        cd tf
+        cd TF
         terraform init
       
     - name: Terraform Validate
       run: |
-        cd tf
+        cd TF
         terraform Validate
        
     - name: Terraform Plan
       run: |
-        cd tf
+        cd TF
         terraform Plan
          
     - name: Terraform Apply
       run: |
-        cd tf
+        cd TF
         terraform  apply -auto-approve
