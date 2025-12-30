@@ -27,12 +27,12 @@ jobs:
     - name: Terraform Validate
       run: |
         cd TF
-        terraform Validate
+        terraform validate
        
     - name: Terraform Plan
       run: |
         cd TF
-        terraform Plan
+        terraform plan
          
     - name: Terraform Apply
       run: |
