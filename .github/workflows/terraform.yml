@@ -33,8 +33,3 @@ jobs:
       run: |
         cd TF
         terraform plan
-        
-    - name: Terraform Apply
-      run: |
-        cd TF
-        terraform  apply -auto-approve
