@@ -2,7 +2,8 @@
     terraform {
       backend "remote" {
         # The name of your Terraform Cloud organization.
-        organization = "app.terraform.io"
+        hostname     = "app.terraform.io"
+        organization = "TuwaAnalytics"
 
         # The name of the Terraform Cloud workspace to store Terraform state files in.
         workspaces {
