@@ -20,21 +20,21 @@ jobs:
         cli_config_credentials_token: ${{ secrets.tfc_team_token }}
       
     - name: Terraform Init
-      run: 
+      run: |
         cd terraform
         terraform init
       
     - name: Terraform Validate
-      run: 
+      run: |
         cd terraform
         terraform Validate
        
     - name: Terraform Plan
-      run: 
+      run: |
         cd terraform
         terraform Plan
          
     - name: Terraform Apply
-      run: 
+      run: |
         cd terraform
         terraform  apply -auto-approve
