@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "test-bucket" {
-  bucket = var.my_bucket_name # Name of the S3 bucket
+  bucket = var.lib-app-proc # Name of the S3 bucket
 }
 
 
@@ -46,8 +46,39 @@ resource "aws_s3_bucket_policy" "host_bucket_policy" {
         "Effect" : "Allow",
         "Principal" : "*",
         "Action" : "s3:GetObject",
-        "Resource": "arn:aws:s3:::${var.my_bucket_name}/*"
+        "Resource": "arn:aws:s3:::${var.lib-app-proc}/*"
       }
     ]
   })
+}
+module "template_files" {
+    source = "hashicorp/dir/template"
+
+    base_dir = "${path.module}/game"
+}
+
+
+resource "aws_s3_bucket_website_configuration" "web-config" {
+  bucket =    aws_s3_bucket.test-bucket.id  # ID of the S3 bucket
+
+  # Configuration for the index document
+  index_document {
+    suffix = "index.html"
+  }
+}
+
+
+# AWS S3 object resource for hosting bucket files
+resource "aws_s3_object" "Bucket_files" {
+  bucket =  aws_s3_bucket.test-bucket.id # ID of the S3 bucket
+
+  for_each     = module.template_files.files
+  key          = each.key
+  content_type = each.value.content_type
+
+  source  = each.value.source_path
+  content = each.value.content
+
+  # ETag of the S3 object
+  etag = each.value.digests.md5
 }
