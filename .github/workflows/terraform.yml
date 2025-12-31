@@ -63,14 +63,11 @@ jobs:
                   "workspace": {
                     "data": {
                       "type": "workspaces",
-                      "id": "ws-library-analytics-tf"
+                      "id": "ws-YYMkyfZzJJ1bRt8d"
                     }
                   }
                 }
               }
             }'
         shell: bash
-        env:
-          TF_CLOUD_ORGANIZATION: TuwaAnalytics
-          TF_WORKSPACE: library-analytics-tf
-
+ 
