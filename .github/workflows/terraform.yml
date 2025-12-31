@@ -1,38 +1,76 @@
-name: Terraform Validate & Plan (Terraform Cloud)
+name: Deploy website to AWS S3
 
 on:
   push:
     branches:
       - main
-  pull_request:
 
 jobs:
-  terraform:
-    name: Terraform
+  Terraform:
+    name: "Terraform"
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v3
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          cli_config_credentials_token: ${{ secrets.TFC_TEAM_TOKEN }}
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Configure Terraform Cloud
+        run: |
+          mkdir -p ~/.terraform.d
+          cat > ~/.terraform.d/credentials.tfrc.json <<EOF
+          {
+            "credentials": {
+              "app.terraform.io": {
+                "token": "${{ secrets.tfc_team_token }}"
+              }
+            }
+          }
+          EOF
+        shell: bash
 
       - name: Terraform Init
-        working-directory: TF
-        run: terraform init
+        run: |
+          cd TF
+          terraform init
 
       - name: Terraform Validate
-        working-directory: TF
-        run: terraform validate
+        run: |
+          cd TF
+          terraform validate
 
       - name: Terraform Plan
-        working-directory: TF
-        run: terraform plan
+        run: |
+          cd TF
+          terraform plan
 
-      - name: Terraform Apply
-        working-directory: TF
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
+      - name: Terraform Apply via Cloud API
+        run: |
+          # Create a run in Terraform Cloud
+          curl --location --request POST 'https://app.terraform.io/api/v2/runs' \
+            --header 'Authorization: Bearer ${{ secrets.tfc_team_token }}' \
+            --header 'Content-Type: application/vnd.api+json' \
+            --data-raw '{
+              "data": {
+                "attributes": {
+                  "auto-apply": true,
+                  "message": "Auto-apply triggered by GitHub Actions"
+                },
+                "type": "runs",
+                "relationships": {
+                  "workspace": {
+                    "data": {
+                      "type": "workspaces",
+                      "id": "ws-library-analytics-tf"
+                    }
+                  }
+                }
+              }
+            }'
+        shell: bash
+        env:
+          TF_CLOUD_ORGANIZATION: TuwaAnalytics
+          TF_WORKSPACE: library-analytics-tf
+
