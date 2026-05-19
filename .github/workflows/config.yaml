@@ -1,0 +1,73 @@
+name: Deploy to Terraform Enterprise
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+env:
+  TFC_TOKEN: ${{ secrets.tfc_team_token }}
+
+jobs:
+  Terraform:
+    name: "Terraform"
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.tfc_team_token }}
+
+      - name: Set Workspace Variables
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "WORKSPACE_ID=ws-prod-1a2b3c4d" >> $GITHUB_ENV
+            echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+          else
+            # Workspace: library-analytics-dev (TuwaAnalytics org)
+            echo "WORKSPACE_ID=ws-YYMkyfZzJJ1bRt8d" >> $GITHUB_ENV
+            echo "ENVIRONMENT=dev" >> $GITHUB_ENV
+          fi
+        shell: bash
+
+      - name: Terraform Init
+        run: |
+          cd TF
+          terraform init
+
+      - name: Terraform Validate
+        run: |
+          cd TF
+          terraform validate
+
+      - name: Terraform Apply via Cloud API
+        run: |
+          curl --silent --fail \
+            --location --request POST 'https://app.terraform.io/api/v2/runs' \
+            --header "Authorization: Bearer $TFC_TOKEN" \
+            --header 'Content-Type: application/vnd.api+json' \
+            --data-raw '{
+              "data": {
+                "attributes": {
+                  "auto-apply": true,
+                  "message": "Auto-apply triggered by GitHub Actions - '"$ENVIRONMENT"' deployment"
+                },
+                "type": "runs",
+                "relationships": {
+                  "workspace": {
+                    "data": {
+                      "type": "workspaces",
+                      "id": "'"$WORKSPACE_ID"'"
+                    }
+                  }
+                }
+              }
+            }'
+        shell: bash
