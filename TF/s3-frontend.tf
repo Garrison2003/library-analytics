@@ -1,6 +1,6 @@
 # S3 bucket for hosting frontend (library-analytics)
 resource "aws_s3_bucket" "frontend" {
-  bucket = "library-analytics-frontend-${data.aws_caller_identity.current.account_id}"
+  bucket = "library-analytics-frontend-${var.environment}-${data.aws_caller_identity.current.account_id}"
 
   tags = {
     Name        = "library-analytics-frontend"
