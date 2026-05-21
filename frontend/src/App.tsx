@@ -1,26 +1,26 @@
-import { useState } from 'react'
-import { Auth0Provider, useAuth0 } from '@auth0/auth0-react'
-import Login from './components/Login'
-import UserProfile from './components/UserProfile'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState } from "react";
+import { Auth0Provider, useAuth0 } from "@auth0/auth0-react";
+import Login from "./components/Login";
+import UserProfile from "./components/UserProfile";
+import reactLogo from "./assets/react.svg";
+import viteLogo from "./assets/vite.svg";
+import heroImg from "./assets/hero.png";
+import "./App.css";
 
-const auth0Domain = import.meta.env.VITE_AUTH0_DOMAIN || ''
-const auth0ClientId = import.meta.env.VITE_AUTH0_CLIENT_ID || ''
-const auth0Audience = import.meta.env.VITE_AUTH0_AUDIENCE as string | undefined
+const auth0Domain = import.meta.env.VITE_AUTH0_DOMAIN || "";
+const auth0ClientId = import.meta.env.VITE_AUTH0_CLIENT_ID || "";
+const auth0Audience = import.meta.env.VITE_AUTH0_AUDIENCE as string | undefined;
 
 function AppContent() {
-  const { isLoading, isAuthenticated, user } = useAuth0()
-  const [count, setCount] = useState(0)
+  const { isLoading, isAuthenticated, user } = useAuth0();
+  const [count, setCount] = useState(0);
 
   if (isLoading) {
-    return <div>Loading...</div>
+    return <div>Loading...</div>;
   }
 
   if (!isAuthenticated) {
-    return <Login />
+    return <Login />;
   }
 
   return (
@@ -29,7 +29,13 @@ function AppContent() {
       <>
         <section id="center">
           <div className="hero">
-            <img src={heroImg} className="base" width="170" height="179" alt="" />
+            <img
+              src={heroImg}
+              className="base"
+              width="170"
+              height="179"
+              alt=""
+            />
             <img src={reactLogo} className="framework" alt="React logo" />
             <img src={viteLogo} className="vite" alt="Vite logo" />
           </div>
@@ -79,7 +85,11 @@ function AppContent() {
             <ul>
               <li>
                 <a href="https://github.com/vitejs/vite" target="_blank">
-                  <svg className="button-icon" role="presentation" aria-hidden="true">
+                  <svg
+                    className="button-icon"
+                    role="presentation"
+                    aria-hidden="true"
+                  >
                     <use href="/icons.svg#github-icon"></use>
                   </svg>
                   GitHub
@@ -87,7 +97,11 @@ function AppContent() {
               </li>
               <li>
                 <a href="https://chat.vite.dev/" target="_blank">
-                  <svg className="button-icon" role="presentation" aria-hidden="true">
+                  <svg
+                    className="button-icon"
+                    role="presentation"
+                    aria-hidden="true"
+                  >
                     <use href="/icons.svg#discord-icon"></use>
                   </svg>
                   Discord
@@ -95,7 +109,11 @@ function AppContent() {
               </li>
               <li>
                 <a href="https://x.com/vite_js" target="_blank">
-                  <svg className="button-icon" role="presentation" aria-hidden="true">
+                  <svg
+                    className="button-icon"
+                    role="presentation"
+                    aria-hidden="true"
+                  >
                     <use href="/icons.svg#x-icon"></use>
                   </svg>
                   X.com
@@ -103,7 +121,11 @@ function AppContent() {
               </li>
               <li>
                 <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                  <svg className="button-icon" role="presentation" aria-hidden="true">
+                  <svg
+                    className="button-icon"
+                    role="presentation"
+                    aria-hidden="true"
+                  >
                     <use href="/icons.svg#bluesky-icon"></use>
                   </svg>
                   Bluesky
@@ -117,7 +139,7 @@ function AppContent() {
         <section id="spacer"></section>
       </>
     </div>
-  )
+  );
 }
 
 function App() {
@@ -128,12 +150,12 @@ function App() {
       authorizationParams={{
         redirect_uri: window.location.origin,
         ...(auth0Audience && { audience: auth0Audience }),
-        scope: 'openid profile email',
+        scope: "openid profile email",
       }}
     >
       <AppContent />
     </Auth0Provider>
-  )
+  );
 }
 
-export default App
+export default App;
