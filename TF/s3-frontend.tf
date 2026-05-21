@@ -185,6 +185,26 @@ resource "aws_cloudfront_distribution" "frontend" {
   depends_on = [aws_s3_bucket_public_access_block.frontend]
 }
 
+# Route 53 record pointing domain to CloudFront
+data "aws_route53_zone" "domain" {
+  count        = var.domain_name != "" ? 1 : 0
+  name         = var.domain_name
+  private_zone = false
+}
+
+resource "aws_route53_record" "frontend" {
+  count   = var.domain_name != "" ? 1 : 0
+  zone_id = data.aws_route53_zone.domain[0].zone_id
+  name    = var.domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.frontend.domain_name
+    zone_id                = aws_cloudfront_distribution.frontend.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
 # Outputs
 output "s3_bucket_name" {
   description = "Name of the S3 bucket"
