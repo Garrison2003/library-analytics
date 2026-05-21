@@ -14,6 +14,9 @@ jobs:
   Deploy:
     name: "Build and Deploy"
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     environment:
       name: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
 
@@ -51,9 +54,9 @@ jobs:
         run: |
           cd frontend
           npm install
-          REACT_APP_AUTH0_DOMAIN=${{ env.AUTH0_DOMAIN }} \
-          REACT_APP_AUTH0_CLIENT_ID=${{ env.AUTH0_CLIENT_ID }} \
-          REACT_APP_AUTH0_AUDIENCE=${{ env.AUTH0_AUDIENCE }} \
+          VITE_AUTH0_DOMAIN=${{ env.AUTH0_DOMAIN }} \
+          VITE_AUTH0_CLIENT_ID=${{ env.AUTH0_CLIENT_ID }} \
+          VITE_AUTH0_AUDIENCE=${{ env.AUTH0_AUDIENCE }} \
           npm run build
 
       - name: Configure AWS Credentials
