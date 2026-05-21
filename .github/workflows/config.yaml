@@ -24,11 +24,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
       - name: Set Workspace Variables
         run: |
           if [ "${{ github.ref }}" == "refs/heads/main" ]; then
@@ -50,6 +45,34 @@ jobs:
           fi
         shell: bash
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.aws_role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.tfc_team_token }}
+
+      - name: Terraform Init
+        run: cd TF && terraform init
+
+      - name: Terraform Validate
+        run: cd TF && terraform validate
+
+      - name: Terraform Plan
+        run: cd TF && terraform plan
+
+      - name: Terraform Apply
+        run: cd TF && terraform apply -auto-approve
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Build React App
         run: |
           cd frontend
@@ -58,12 +81,6 @@ jobs:
           VITE_AUTH0_CLIENT_ID=${{ env.AUTH0_CLIENT_ID }} \
           VITE_AUTH0_AUDIENCE=${{ env.AUTH0_AUDIENCE }} \
           npm run build
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.aws_role_arn }}
-          aws-region: ${{ env.AWS_REGION }}
 
       - name: Deploy to S3
         run: |
@@ -76,48 +93,3 @@ jobs:
           if [ -n "$DISTRIBUTION_ID" ]; then
             aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
           fi
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          cli_config_credentials_token: ${{ secrets.tfc_team_token }}
-
-      - name: Terraform Init
-        run: |
-          cd TF
-          terraform init
-
-      - name: Terraform Validate
-        run: |
-          cd TF
-          terraform validate
-
-      - name: Terraform Plan
-        run: |
-          cd TF
-          terraform plan
-
-      - name: Terraform Apply via Cloud API
-        run: |
-          curl --silent --fail \
-            --location --request POST 'https://app.terraform.io/api/v2/runs' \
-            --header "Authorization: Bearer ${{ env.TFC_TOKEN }}" \
-            --header 'Content-Type: application/vnd.api+json' \
-            --data-raw '{
-              "data": {
-                "attributes": {
-                  "auto-apply": true,
-                  "message": "Auto-apply triggered by GitHub Actions - ${{ env.ENVIRONMENT }} deployment"
-                },
-                "type": "runs",
-                "relationships": {
-                  "workspace": {
-                    "data": {
-                      "type": "workspaces",
-                      "id": "${{ env.WORKSPACE_ID }}"
-                    }
-                  }
-                }
-              }
-            }'
-        shell: bash
