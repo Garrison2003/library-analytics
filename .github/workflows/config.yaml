@@ -58,6 +58,7 @@ jobs:
 
       - name: Terraform Init
         run: cd TF && terraform init
+
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
@@ -88,6 +89,7 @@ jobs:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
 
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -110,3 +112,4 @@ jobs:
       - name: Invalidate CloudFront Cache
         run: |
           aws cloudfront create-invalidation --distribution-id ${{ env.TF_DISTRIBUTION_ID }} --paths "/*"
+
