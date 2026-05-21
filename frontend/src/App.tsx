@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Auth0Provider, useAuth0 } from "@auth0/auth0-react";
 import Login from "./components/Login";
 import UserProfile from "./components/UserProfile";
+import AccessDenied from "./components/AccessDenied";
 import reactLogo from "./assets/react.svg";
 import viteLogo from "./assets/vite.svg";
 import heroImg from "./assets/hero.png";
@@ -12,11 +13,15 @@ const auth0ClientId = import.meta.env.VITE_AUTH0_CLIENT_ID || "";
 const auth0Audience = import.meta.env.VITE_AUTH0_AUDIENCE as string | undefined;
 
 function AppContent() {
-  const { isLoading, isAuthenticated, user } = useAuth0();
+  const { isLoading, isAuthenticated, error, user } = useAuth0();
   const [count, setCount] = useState(0);
 
   if (isLoading) {
     return <div>Loading...</div>;
+  }
+
+  if (error) {
+    return <AccessDenied />;
   }
 
   if (!isAuthenticated) {
