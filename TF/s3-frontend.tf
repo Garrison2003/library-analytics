@@ -169,12 +169,12 @@ resource "aws_cloudfront_distribution" "frontend" {
 
   # TLS viewer certificate
   viewer_certificate {
-    cloudfront_default_certificate = var.domain_name == "" ? true : null
-    acm_certificate_arn            = var.domain_name != "" ? var.acm_certificate_arn : null
-    ssl_support_method             = var.domain_name != "" ? "sni-only" : null
-    minimum_protocol_version       = var.domain_name != "" ? "TLSv1.2_2021" : null
+    cloudfront_default_certificate = (var.domain_name == "" || var.acm_certificate_arn == "") ? true : null
+    acm_certificate_arn            = (var.domain_name != "" && var.acm_certificate_arn != "") ? var.acm_certificate_arn : null
+    ssl_support_method             = (var.domain_name != "" && var.acm_certificate_arn != "") ? "sni-only" : null
+    minimum_protocol_version       = (var.domain_name != "" && var.acm_certificate_arn != "") ? "TLSv1.2_2021" : null
   }
-  aliases = var.domain_name != "" ? [var.domain_name] : []
+  aliases = (var.domain_name != "" && var.acm_certificate_arn != "") ? [var.domain_name] : []
 
   tags = {
     Name        = "library-analytics-cdn"
@@ -187,13 +187,13 @@ resource "aws_cloudfront_distribution" "frontend" {
 
 # Route 53 record pointing domain to CloudFront
 data "aws_route53_zone" "domain" {
-  count        = var.domain_name != "" ? 1 : 0
+  count        = (var.domain_name != "" && var.acm_certificate_arn != "") ? 1 : 0
   name         = var.domain_name
   private_zone = false
 }
 
 resource "aws_route53_record" "frontend" {
-  count   = var.domain_name != "" ? 1 : 0
+  count   = (var.domain_name != "" && var.acm_certificate_arn != "") ? 1 : 0
   zone_id = data.aws_route53_zone.domain[0].zone_id
   name    = var.domain_name
   type    = "A"

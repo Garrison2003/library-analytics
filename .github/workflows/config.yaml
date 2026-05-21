@@ -117,7 +117,7 @@ jobs:
       - name: Deploy to S3
         run: |
           aws s3 sync frontend/dist/ s3://${{ env.TF_S3_BUCKET }}/ --delete --cache-control "max-age=3600"
-          aws s3 cp s3://${{ env.TF_S3_BUCKET }}/index.html s3://${{ env.TF_S3_BUCKET }}/index.html --cache-control "max-age=0" --metadata-directive REPLACE
+          aws s3 cp s3://${{ env.TF_S3_BUCKET }}/index.html s3://${{ env.TF_S3_BUCKET }}/index.html --content-type "text/html" --cache-control "no-cache, no-store, must-revalidate" --metadata-directive REPLACE
 
       - name: Invalidate CloudFront Cache
         run: |
