@@ -172,7 +172,6 @@ resource "aws_cloudfront_distribution" "frontend" {
     ssl_support_method             = var.domain_name != "" ? "sni-only" : null
     minimum_protocol_version       = var.domain_name != "" ? "TLSv1.2_2021" : null
   }
-
   aliases = var.domain_name != "" ? [var.domain_name] : []
 
   tags = {
