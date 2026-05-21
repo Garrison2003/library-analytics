@@ -34,11 +34,11 @@
   color: #6b7280;
   margin: 0;
 }
-
 .login-button {
   display: flex;
   justify-content: center;
   margin: 30px 0;
+
 }
 
 .login-footer {

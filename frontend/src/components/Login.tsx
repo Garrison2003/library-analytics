@@ -27,9 +27,9 @@ function Login() {
           </svg>
           Sign in with Auth0
         </button>
-
         <div className="login-footer">
           <p>Your credentials will be securely validated through Auth0</p>
+
         </div>
       </div>
     </div>
