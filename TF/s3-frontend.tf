@@ -15,7 +15,7 @@ resource "aws_s3_bucket_versioning" "frontend" {
 
   versioning_configuration {
     status     = "Enabled"
-    mfa_delete = false
+    mfa_delete = "Disabled"
   }
 }
 
@@ -47,6 +47,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "frontend" {
   rule {
     id     = "archive-old-versions"
     status = "Enabled"
+
+    filter {}
 
     noncurrent_version_transition {
       noncurrent_days = 30

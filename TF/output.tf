@@ -1,4 +1,4 @@
 output "website_url" {
-    description = "My website URL"
-    value = aws_s3_bucket_website_configuration.web-config.website_endpoint
+  description = "CloudFront distribution URL"
+  value       = "https://${aws_cloudfront_distribution.frontend.domain_name}"
 }
