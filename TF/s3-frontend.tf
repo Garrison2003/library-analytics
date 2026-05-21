@@ -167,9 +167,13 @@ resource "aws_cloudfront_distribution" "frontend" {
 
   # TLS viewer certificate
   viewer_certificate {
-    cloudfront_default_certificate = true
-    # For custom domain: use var.domain_name and aws_acm_certificate
+    cloudfront_default_certificate = var.domain_name == "" ? true : null
+    acm_certificate_arn            = var.domain_name != "" ? var.acm_certificate_arn : null
+    ssl_support_method             = var.domain_name != "" ? "sni-only" : null
+    minimum_protocol_version       = var.domain_name != "" ? "TLSv1.2_2021" : null
   }
+
+  aliases = var.domain_name != "" ? [var.domain_name] : []
 
   tags = {
     Name        = "library-analytics-cdn"

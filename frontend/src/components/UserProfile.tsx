@@ -1,19 +1,18 @@
-import { useAuth0 } from "@auth0/auth0-react";
-import "../styles/UserProfile.css";
+import { useAuth0 } from '@auth0/auth0-react'
+import '../styles/UserProfile.css'
 
 interface UserProfileProps {
-  user: any;
-  onLogout: () => void;
+  user: any
 }
 
-function UserProfile({ user, onLogout }: UserProfileProps) {
-  const { logout } = useAuth0();
+function UserProfile({ user }: UserProfileProps) {
+  const { logout } = useAuth0()
 
   const handleLogout = () => {
-    logout({ logoutParams: { returnTo: window.location.origin } });
-  };
+    logout({ logoutParams: { returnTo: window.location.origin } })
+  }
 
-  if (!user) return null;
+  if (!user) return null
 
   return (
     <div className="user-profile">
@@ -30,7 +29,7 @@ function UserProfile({ user, onLogout }: UserProfileProps) {
         </button>
       </div>
     </div>
-  );
+  )
 }
 
-export default UserProfile;
+export default UserProfile
