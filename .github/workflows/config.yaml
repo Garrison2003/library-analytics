@@ -58,15 +58,30 @@ jobs:
 
       - name: Terraform Init
         run: cd TF && terraform init
+        env:
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
 
       - name: Terraform Validate
         run: cd TF && terraform validate
+        env:
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
 
       - name: Terraform Plan
         run: cd TF && terraform plan
+        env:
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
 
       - name: Terraform Apply
         run: cd TF && terraform apply -auto-approve
+        env:
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
+
+      - name: Read Terraform Outputs
+        run: |
+          echo "TF_S3_BUCKET=$(cd TF && terraform output -raw s3_bucket_name)" >> $GITHUB_ENV
+          echo "TF_DISTRIBUTION_ID=$(cd TF && terraform output -raw cloudfront_distribution_id)" >> $GITHUB_ENV
+        env:
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -84,12 +99,9 @@ jobs:
 
       - name: Deploy to S3
         run: |
-          aws s3 sync frontend/dist/ s3://${{ env.S3_BUCKET }}/ --delete --cache-control "max-age=3600"
-          aws s3 cp s3://${{ env.S3_BUCKET }}/index.html s3://${{ env.S3_BUCKET }}/index.html --cache-control "max-age=0" --metadata-directive REPLACE
+          aws s3 sync frontend/dist/ s3://${{ env.TF_S3_BUCKET }}/ --delete --cache-control "max-age=3600"
+          aws s3 cp s3://${{ env.TF_S3_BUCKET }}/index.html s3://${{ env.TF_S3_BUCKET }}/index.html --cache-control "max-age=0" --metadata-directive REPLACE
 
       - name: Invalidate CloudFront Cache
         run: |
-          DISTRIBUTION_ID=$(cd TF && terraform output -raw cloudfront_distribution_id 2>/dev/null || echo "")
-          if [ -n "$DISTRIBUTION_ID" ]; then
-            aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
-          fi
+          aws cloudfront create-invalidation --distribution-id ${{ env.TF_DISTRIBUTION_ID }} --paths "/*"
