@@ -53,25 +53,6 @@ variable "enable_versioning" {
   default     = true
 }
 
-variable "auth0_domain" {
-  description = "Auth0 tenant domain (e.g. dev-xxxx.us.auth0.com)"
-  type        = string
-  sensitive   = true
-}
-
-variable "auth0_client_id" {
-  description = "Auth0 application client ID"
-  type        = string
-  sensitive   = true
-}
-
-variable "auth0_audience" {
-  description = "Auth0 API audience (optional)"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
 variable "tags" {
   description = "Common tags for all resources"
   type        = map(string)
