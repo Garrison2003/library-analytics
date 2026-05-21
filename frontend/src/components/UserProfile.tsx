@@ -3,12 +3,10 @@ import "../styles/UserProfile.css";
 
 interface UserProfileProps {
   user: any;
-  onLogout: () => void;
 }
+function UserProfile({ user }: UserProfileProps) {
 
-function UserProfile({ user, onLogout }: UserProfileProps) {
   const { logout } = useAuth0();
-
   const handleLogout = () => {
     logout({ logoutParams: { returnTo: window.location.origin } });
   };

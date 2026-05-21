@@ -25,7 +25,7 @@ function AppContent() {
 
   return (
     <div className="app-container">
-      <UserProfile user={user} onLogout={() => {}} />
+      <UserProfile user={user} />
       <>
         <section id="center">
           <div className="hero">

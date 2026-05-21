@@ -3,7 +3,7 @@
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "us-east-1"  # CloudFront requires us-east-1 for certificates
+  default     = "us-east-1
 }
 
 variable "environment" {
@@ -51,6 +51,25 @@ variable "enable_versioning" {
   description = "Enable S3 versioning for backup"
   type        = bool
   default     = true
+}
+
+variable "auth0_domain" {
+  description = "Auth0 tenant domain (e.g. dev-xxxx.us.auth0.com)"
+  type        = string
+  sensitive   = true
+}
+
+variable "auth0_client_id" {
+  description = "Auth0 application client ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "auth0_audience" {
+  description = "Auth0 API audience (optional)"
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 
 variable "tags" {
