@@ -28,6 +28,7 @@ jobs:
         run: |
           if [ "${{ github.ref }}" == "refs/heads/main" ]; then
             echo "WORKSPACE_ID=ws-prod-1a2b3c4d" >> $GITHUB_ENV
+            echo "TF_WORKSPACE=library-analytics-prod" >> $GITHUB_ENV
             echo "ENVIRONMENT=prod" >> $GITHUB_ENV
             echo "S3_BUCKET=library-analytics-frontend-prod" >> $GITHUB_ENV
             echo "DOMAIN_NAME=library-analytics.com" >> $GITHUB_ENV
@@ -36,6 +37,7 @@ jobs:
             echo "AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE_PROD }}" >> $GITHUB_ENV
           else
             echo "WORKSPACE_ID=ws-YYMkyfZzJJ1bRt8d" >> $GITHUB_ENV
+            echo "TF_WORKSPACE=library-analytics-dev" >> $GITHUB_ENV
             echo "ENVIRONMENT=dev" >> $GITHUB_ENV
             echo "S3_BUCKET=library-analytics-frontend-dev" >> $GITHUB_ENV
             echo "DOMAIN_NAME=library-analytics-dev.com" >> $GITHUB_ENV

@@ -10,14 +10,9 @@ terraform {
     }
   }
 
-  # Uncomment to use remote state (highly recommended for production)
-  # backend "s3" {
-  #   bucket         = "your-terraform-state-bucket"
-  #   key            = "library-analytics/frontend/terraform.tfstate"
-  #   region         = "us-east-1"
-  #   encrypt        = true
-  #   dynamodb_table = "terraform-locks"
-  # }
+  cloud {
+    organization = "TuwaAnalytics"
+  }
 }
 
 provider "aws" {
