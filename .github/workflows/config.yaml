@@ -8,10 +8,11 @@ on:
 
 env:
   TFC_TOKEN: ${{ secrets.tfc_team_token }}
+  AWS_REGION: us-east-1
 
 jobs:
-  Terraform:
-    name: "Terraform"
+  Deploy:
+    name: "Build and Deploy"
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
@@ -20,22 +21,63 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          cli_config_credentials_token: ${{ secrets.tfc_team_token }}
+          node-version: "22"
 
       - name: Set Workspace Variables
         run: |
           if [ "${{ github.ref }}" == "refs/heads/main" ]; then
             echo "WORKSPACE_ID=ws-prod-1a2b3c4d" >> $GITHUB_ENV
             echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+            echo "S3_BUCKET=library-analytics-frontend-prod" >> $GITHUB_ENV
+            echo "DOMAIN_NAME=library-analytics.com" >> $GITHUB_ENV
+            echo "AUTH0_DOMAIN=${{ secrets.AUTH0_DOMAIN_PROD }}" >> $GITHUB_ENV
+            echo "AUTH0_CLIENT_ID=${{ secrets.AUTH0_CLIENT_ID_PROD }}" >> $GITHUB_ENV
+            echo "AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE_PROD }}" >> $GITHUB_ENV
           else
-            # Workspace: library-analytics-dev (TuwaAnalytics org)
             echo "WORKSPACE_ID=ws-YYMkyfZzJJ1bRt8d" >> $GITHUB_ENV
             echo "ENVIRONMENT=dev" >> $GITHUB_ENV
+            echo "S3_BUCKET=library-analytics-frontend-dev" >> $GITHUB_ENV
+            echo "DOMAIN_NAME=library-analytics-dev.com" >> $GITHUB_ENV
+            echo "AUTH0_DOMAIN=${{ secrets.AUTH0_DOMAIN_DEV }}" >> $GITHUB_ENV
+            echo "AUTH0_CLIENT_ID=${{ secrets.AUTH0_CLIENT_ID_DEV }}" >> $GITHUB_ENV
+            echo "AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE_DEV }}" >> $GITHUB_ENV
           fi
         shell: bash
+
+      - name: Build React App
+        run: |
+          cd frontend
+          npm install
+          REACT_APP_AUTH0_DOMAIN=${{ env.AUTH0_DOMAIN }} \
+          REACT_APP_AUTH0_CLIENT_ID=${{ env.AUTH0_CLIENT_ID }} \
+          REACT_APP_AUTH0_AUDIENCE=${{ env.AUTH0_AUDIENCE }} \
+          npm run build
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.aws_role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync frontend/dist/ s3://${{ env.S3_BUCKET }}/ --delete --cache-control "max-age=3600"
+          aws s3 cp s3://${{ env.S3_BUCKET }}/index.html s3://${{ env.S3_BUCKET }}/index.html --cache-control "max-age=0" --metadata-directive REPLACE
+
+      - name: Invalidate CloudFront Cache
+        run: |
+          DISTRIBUTION_ID=$(cd TF && terraform output -raw cloudfront_distribution_id 2>/dev/null || echo "")
+          if [ -n "$DISTRIBUTION_ID" ]; then
+            aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
+          fi
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.tfc_team_token }}
 
       - name: Terraform Init
         run: |
@@ -47,24 +89,29 @@ jobs:
           cd TF
           terraform validate
 
+      - name: Terraform Plan
+        run: |
+          cd TF
+          terraform plan
+
       - name: Terraform Apply via Cloud API
         run: |
           curl --silent --fail \
             --location --request POST 'https://app.terraform.io/api/v2/runs' \
-            --header "Authorization: Bearer $TFC_TOKEN" \
+            --header "Authorization: Bearer ${{ env.TFC_TOKEN }}" \
             --header 'Content-Type: application/vnd.api+json' \
             --data-raw '{
               "data": {
                 "attributes": {
                   "auto-apply": true,
-                  "message": "Auto-apply triggered by GitHub Actions - '"$ENVIRONMENT"' deployment"
+                  "message": "Auto-apply triggered by GitHub Actions - ${{ env.ENVIRONMENT }} deployment"
                 },
                 "type": "runs",
                 "relationships": {
                   "workspace": {
                     "data": {
                       "type": "workspaces",
-                      "id": "'"$WORKSPACE_ID"'"
+                      "id": "${{ env.WORKSPACE_ID }}"
                     }
                   }
                 }
