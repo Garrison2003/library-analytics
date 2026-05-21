@@ -60,21 +60,25 @@ jobs:
         run: cd TF && terraform init
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
+          TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
 
       - name: Terraform Validate
         run: cd TF && terraform validate
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
+          TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
 
       - name: Terraform Plan
         run: cd TF && terraform plan
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
+          TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
 
       - name: Terraform Apply
         run: cd TF && terraform apply -auto-approve
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
+          TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
 
       - name: Read Terraform Outputs
         run: |
@@ -82,6 +86,7 @@ jobs:
           echo "TF_DISTRIBUTION_ID=$(cd TF && terraform output -raw cloudfront_distribution_id)" >> $GITHUB_ENV
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
+          TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
