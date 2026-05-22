@@ -14,16 +14,19 @@ npm install
 ## Running Tests
 
 ### Run all tests in watch mode:
+
 ```bash
 npm test
 ```
 
 ### Run tests with UI dashboard:
+
 ```bash
 npm run test:ui
 ```
 
 ### Generate coverage report:
+
 ```bash
 npm run test:coverage
 ```
@@ -38,8 +41,9 @@ npm run test:coverage
 ## Key Testing Patterns
 
 ### Mocking Auth0
+
 ```typescript
-vi.mock('@auth0/auth0-react');
+vi.mock("@auth0/auth0-react");
 
 beforeEach(() => {
   (useAuth0 as any).mockReturnValue({
@@ -51,15 +55,19 @@ beforeEach(() => {
 ```
 
 ### Testing User Interactions
+
 ```typescript
 const user = userEvent.setup();
 await user.click(button);
 ```
 
 ### Checking Rendered Content
+
 ```typescript
-expect(screen.getByText('Expected text')).toBeInTheDocument();
-expect(screen.getByRole('button', { name: /Button Label/i })).toBeInTheDocument();
+expect(screen.getByText("Expected text")).toBeInTheDocument();
+expect(
+  screen.getByRole("button", { name: /Button Label/i }),
+).toBeInTheDocument();
 ```
 
 ## Files
