@@ -30,7 +30,7 @@ describe("UserProfile Component", () => {
       user: null,
     });
 
-    const { container } = render(<UserProfile user={null} />);
+    const { container } = render(<UserProfile user={undefined} />);
     expect(container.firstChild).toBeNull();
   });
 

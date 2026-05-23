@@ -1,65 +1,85 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import AccessDenied from "../components/AccessDenied";
+import userEvent from "@testing-library/user-event";
+import AccessDenied from "./AccessDenied";
 
 describe("AccessDenied Component", () => {
-  it("renders access denied container", () => {
-    render(<AccessDenied />);
-    const container = document.querySelector(".access-denied-container");
-    expect(container).toBeInTheDocument();
+  beforeEach(() => {
+    vi.stubGlobal("location", { reload: vi.fn(), href: "" });
   });
 
-  it("renders access denied card", () => {
-    render(<AccessDenied />);
-    const card = document.querySelector(".access-denied-card");
-    expect(card).toBeInTheDocument();
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
-  it("renders error icon", () => {
-    render(<AccessDenied />);
-    const icon = document.querySelector(".access-denied-icon");
-    expect(icon).toBeInTheDocument();
-    const svg = icon?.querySelector("svg");
-    expect(svg).toBeInTheDocument();
-  });
-
-  it("renders Access Denied heading", () => {
-    render(<AccessDenied />);
-    const heading = screen.getByRole("heading", {
-      level: 1,
-      name: /Access Denied/i,
-    });
-    expect(heading).toBeInTheDocument();
-  });
-
-  it("renders authorization message", () => {
+  it("renders the Access Denied heading", () => {
     render(<AccessDenied />);
     expect(
-      screen.getByText(
-        /Your account has not been authorized to access this application./,
-      ),
+      screen.getByRole("heading", { level: 1, name: /Access Denied/i }),
     ).toBeInTheDocument();
   });
 
-  it("renders contact admin message", () => {
+  it("renders the error description", () => {
     render(<AccessDenied />);
     expect(
-      screen.getByText(/Please contact your administrator to request access./),
+      screen.getByText(/We encountered an issue during authentication/i),
     ).toBeInTheDocument();
   });
 
-  it("renders return to login button", () => {
+  it("renders the Troubleshooting heading", () => {
     render(<AccessDenied />);
-    const link = screen.getByRole("link", { name: /Return to Login/i });
-    expect(link).toBeInTheDocument();
-    expect(link).toHaveAttribute("href", "/");
+    expect(screen.getByText("Troubleshooting:")).toBeInTheDocument();
   });
 
-  it("applies correct CSS classes", () => {
+  it("renders all four troubleshooting steps", () => {
     render(<AccessDenied />);
-    const card = document.querySelector(".access-denied-card");
-    expect(card).toHaveClass("access-denied-card");
-    const button = screen.getByRole("link", { name: /Return to Login/i });
-    expect(button).toHaveClass("access-denied-button");
+    expect(
+      screen.getByText(/Verify VITE_AUTH0_DOMAIN is set correctly/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Verify VITE_AUTH0_CLIENT_ID is set correctly/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Check Auth0 dashboard for allowed callback URLs/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Ensure your network connection is stable/i),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the Try Again button", () => {
+    render(<AccessDenied />);
+    expect(
+      screen.getByRole("button", { name: /Try Again/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the Go Home button", () => {
+    render(<AccessDenied />);
+    expect(
+      screen.getByRole("button", { name: /Go Home/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("calls window.location.reload when Try Again is clicked", async () => {
+    const user = userEvent.setup();
+    render(<AccessDenied />);
+    await user.click(screen.getByRole("button", { name: /Try Again/i }));
+    expect(window.location.reload).toHaveBeenCalledOnce();
+  });
+
+  it("sets window.location.href to '/' when Go Home is clicked", async () => {
+    const user = userEvent.setup();
+    render(<AccessDenied />);
+    await user.click(screen.getByRole("button", { name: /Go Home/i }));
+    expect(window.location.href).toBe("/");
+  });
+
+  it("renders a link to Auth0 documentation", () => {
+    render(<AccessDenied />);
+    const link = screen.getByRole("link", { name: /View Auth0 documentation/i });
+    expect(link).toHaveAttribute("href", "https://auth0.com/docs");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });
 });
