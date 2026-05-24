@@ -48,7 +48,7 @@ const Homepage: React.FC<HomepageProps> = ({
   return (
     <div className="w-full">
       {/* Hero Section */}
-      <section className="bg-gradient-to-r from-blue-100 to-blue-50 py-16 px-8">
+      <section className="py-16 px-8">
         <div className="max-w-6xl mx-auto">
           <h1 className="text-4xl font-bold text-blue-900 mb-3">
             Welcome to Library Analytics
@@ -61,7 +61,7 @@ const Homepage: React.FC<HomepageProps> = ({
       </section>
 
       {/* Quick Access Section */}
-      <section className="py-16 px-8 bg-gray-50">
+      <section className="py-16 px-8">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-2xl font-bold text-gray-900 mb-8">
             Quick Access
@@ -96,7 +96,7 @@ const Homepage: React.FC<HomepageProps> = ({
       </section>
 
       {/* Circulation Trends Section */}
-      <section className="py-16 px-8 bg-white">
+      <section className="py-16 px-8">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-2xl font-bold text-gray-900 mb-8">At a Glance</h2>
           <CirculationTrends />
@@ -104,7 +104,7 @@ const Homepage: React.FC<HomepageProps> = ({
       </section>
 
       {/* Questions Section */}
-      <section className="py-16 px-8 bg-gray-50">
+      <section className="py-16 px-8">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Questions</h2>
           <p className="text-gray-600 mb-6">
