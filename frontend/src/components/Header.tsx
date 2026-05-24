@@ -23,7 +23,7 @@ const Header: React.FC<HeaderProps> = ({ onLogoClick }) => {
           <BarChart3 className="w-8 h-8" />
           <div>
             <h1 className="text-xl font-bold">Library Analytics</h1>
-            <p className="text-xs text-blue-200">Data Intelligence Platform</p>
+            <p className="text-xs text-blue-200">Powerful Library Data Management &amp; Analytics</p>
           </div>
         </button>
 

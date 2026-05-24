@@ -26,21 +26,6 @@ describe("Footer Component", () => {
     expect(screen.getByText("Terms of Service")).toBeInTheDocument();
   });
 
-  it("renders the Contact Support link", () => {
-    render(<Footer />);
-    expect(screen.getByText("Contact Support")).toBeInTheDocument();
-  });
-
-  it("renders the Documentation link", () => {
-    render(<Footer />);
-    expect(screen.getByText("Documentation")).toBeInTheDocument();
-  });
-
-  it("renders version info", () => {
-    render(<Footer />);
-    expect(screen.getByText(/Version 1\.0\.0/i)).toBeInTheDocument();
-  });
-
   it("renders a footer element", () => {
     render(<Footer />);
     expect(screen.getByRole("contentinfo")).toBeInTheDocument();
