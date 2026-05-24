@@ -11,7 +11,9 @@ describe("Header Component", () => {
 
   it("renders the tagline", () => {
     render(<Header onLogoClick={vi.fn()} />);
-    expect(screen.getByText("Data Intelligence Platform")).toBeInTheDocument();
+    expect(
+      screen.getByText("Powerful Library Data Management & Analytics"),
+    ).toBeInTheDocument();
   });
 
   it("calls onLogoClick when the logo button is clicked", async () => {
