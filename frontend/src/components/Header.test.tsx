@@ -14,6 +14,7 @@ describe("Header Component", () => {
     expect(
       screen.getByText("Powerful Library Data Management & Analytics"),
     ).toBeInTheDocument();
+
   });
 
   it("calls onLogoClick when the logo button is clicked", async () => {

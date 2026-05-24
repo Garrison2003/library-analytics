@@ -38,7 +38,6 @@ const QuickAccessCard: React.FC<QuickAccessCardProps> = ({
     green: "text-green-500",
     orange: "text-orange-500",
   };
-
   return (
     <button
       onClick={onClick}
@@ -56,9 +55,9 @@ const QuickAccessCard: React.FC<QuickAccessCardProps> = ({
 
       {/* Description */}
       <p className="text-sm text-gray-600">{description}</p>
-
       {/* Arrow */}
       <div className={`mt-4 text-right ${arrowColorClasses[color]}`}>→</div>
+
     </button>
   );
 };
