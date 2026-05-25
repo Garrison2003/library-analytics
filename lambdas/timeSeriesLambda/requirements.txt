@@ -1,0 +1,6 @@
+# AWS Lambda dependencies
+# Add any additional Python packages needed for time series processing
+# For example:
+# pandas==2.1.0
+# numpy==1.24.0
+# boto3==1.28.0

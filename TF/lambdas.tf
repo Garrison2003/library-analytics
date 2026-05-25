@@ -5,7 +5,7 @@ resource "aws_lambda_function" "time_series_lambda" {
   handler       = "index.handler" # The name of your handler function (e.g., filename.export)
 
   # Choose the runtime (e.g., nodejs22.x, python3.12, etc.)
-  runtime = "nodejs22.x"
+  runtime = "python3.12"
 
   # Ensures the code is updated when the zip file changes
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
