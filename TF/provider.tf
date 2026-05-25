@@ -1,7 +1,7 @@
 # provider.tf - Configure AWS provider and data sources
 
 terraform {
-  required_version = ">= 1.0"
+  required_version = "~> 1.15.0"
 
   required_providers {
     aws = {
@@ -11,7 +11,12 @@ terraform {
   }
 
   cloud {
+    hostname     = "app.terraform.io"
     organization = "TuwaAnalytics"
+
+    workspaces {
+      name = "library-analytics-dev"
+    }
   }
 }
 
