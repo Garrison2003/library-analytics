@@ -53,6 +53,19 @@ jobs:
           role-to-assume: ${{ secrets.aws_role_arn }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Setup Node.js for Lambda
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build Time Series Lambda
+        run: |
+          cd lambdas/timeSeriesLambda
+          npm install
+          npm run build
+          cd ../..
+          cd lambdas/timeSeriesLambda && zip -r ../../TF/lambda_function_payload.zip dist/ package.json node_modules/
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
