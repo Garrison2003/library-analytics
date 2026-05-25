@@ -53,18 +53,18 @@ jobs:
           role-to-assume: ${{ secrets.aws_role_arn }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup Node.js for Lambda
-        uses: actions/setup-node@v4
+      - name: Setup Python for Lambda
+        uses: actions/setup-python@v5
         with:
-          node-version: "22"
+          python-version: "3.12"
 
       - name: Build Time Series Lambda
         run: |
           cd lambdas/timeSeriesLambda
-          npm install
-          npm run build
-          cd ../..
-          cd lambdas/timeSeriesLambda && zip -r ../../TF/lambda_function_payload.zip dist/ package.json node_modules/
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt -t .
+          fi
+          zip -r ../../TF/lambda_function_payload.zip . -x "*.git*" -x "*__pycache__*" -x "*.pyc"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
