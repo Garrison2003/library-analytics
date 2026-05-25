@@ -1,0 +1,16 @@
+{
+  "name": "time-series-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function for processing library analytics time series data",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "package": "npm run build && zip -r ../../TF/lambda_function_payload.zip dist/ node_modules/"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
