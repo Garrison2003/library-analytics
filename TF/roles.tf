@@ -1,7 +1,7 @@
-# ── Existing: Basic Lambda execution role ────────────────────────────────────
+# ── Time Series Lambda role ───────────────────────────────────────────────────
 
-resource "aws_iam_role" "lmbd_basic_exec" {
-  name = "lmbd_basic_exec"
+resource "aws_iam_role" "time_series_lambda" {
+  name = "${var.project_name}-time-series-lambda-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -18,8 +18,8 @@ resource "aws_iam_role" "lmbd_basic_exec" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "lambda_logs" {
-  role       = aws_iam_role.lmbd_basic_exec.name
+resource "aws_iam_role_policy_attachment" "time_series_lambda_logs" {
+  role       = aws_iam_role.time_series_lambda.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
