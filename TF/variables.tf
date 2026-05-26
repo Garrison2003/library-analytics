@@ -44,7 +44,7 @@ variable "cache_ttl_default" {
 variable "cache_ttl_assets" {
   description = "Cache TTL for static assets in seconds"
   type        = number
-  default     = 31536000  # 1 year
+  default     = 31536000 # 1 year
 }
 
 variable "enable_versioning" {
