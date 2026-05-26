@@ -61,21 +61,21 @@ resource "aws_iam_role_policy" "circulation_lambda" {
         Resource = "arn:aws:logs:*:*:*"
       },
       {
-        Sid    = "S3ReadUploads"
-        Effect = "Allow"
-        Action = ["s3:GetObject"]
+        Sid      = "S3ReadUploads"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
         Resource = "${aws_s3_bucket.circulation.arn}/${var.circulation_upload_prefix}*"
       },
       {
-        Sid    = "S3WriteProcessed"
-        Effect = "Allow"
-        Action = ["s3:PutObject"]
+        Sid      = "S3WriteProcessed"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
         Resource = "${aws_s3_bucket.circulation.arn}/${var.circulation_processed_key}"
       },
       {
-        Sid    = "S3ReadProcessed"
-        Effect = "Allow"
-        Action = ["s3:GetObject"]
+        Sid      = "S3ReadProcessed"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
         Resource = "${aws_s3_bucket.circulation.arn}/${var.circulation_processed_key}"
       }
     ]
