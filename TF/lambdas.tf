@@ -1,7 +1,7 @@
 resource "aws_lambda_function" "time_series_lambda" {
   filename      = "lambda_function_payload.zip"
   function_name = "time_series_lambda"
-  role          = aws_iam_role.lmbd_basic_exec.arn
+  role          = aws_iam_role.time_series_lambda.arn
   handler       = "index.handler" # The name of your handler function (e.g., filename.export)
 
   # Choose the runtime (e.g., nodejs22.x, python3.12, etc.)
