@@ -140,7 +140,7 @@ resource "aws_cloudfront_distribution" "frontend" {
 
     viewer_protocol_policy = "https-only"
     min_ttl                = 0
-    default_ttl            = 31536000  # 1 year for assets
+    default_ttl            = 31536000 # 1 year for assets
     max_ttl                = 31536000
     compress               = true
   }

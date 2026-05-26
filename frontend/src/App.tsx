@@ -7,28 +7,27 @@ import DailyAnalytics from "./pages/DailyAnalytics";
 import Upload from "./pages/Upload";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
+import TabNavigation from "./components/TabNavigation";
 import Login from "./components/Login";
 import UserProfile from "./components/UserProfile";
 import AccessDenied from "./components/AccessDenied";
+import type { TabId } from "./components/TabNavigation";
 import "./App.css";
 
 const auth0Domain = import.meta.env.VITE_AUTH0_DOMAIN || "";
 const auth0ClientId = import.meta.env.VITE_AUTH0_CLIENT_ID || "";
 const auth0Audience = import.meta.env.VITE_AUTH0_AUDIENCE as string | undefined;
 
-type Page = "home" | "monthly" | "daily" | "upload";
-
 /**
  * AppContent Component
  *
- * Main application content that handles authentication and routing
- * Only renders the Library Analytics dashboard for authenticated users
+ * Handles authentication states and tab-based page routing.
+ * Navigation is via a horizontal tab bar (Dashboard, Monthly, Daily, Upload).
  */
 function AppContent() {
   const { isLoading, isAuthenticated, error, user } = useAuth0();
-  const [currentPage, setCurrentPage] = useState<Page>("home");
+  const [activeTab, setActiveTab] = useState<TabId>("dashboard");
 
-  // Loading state
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -42,22 +41,48 @@ function AppContent() {
     );
   }
 
-  // Error state
   if (error) {
     return <AccessDenied />;
   }
 
-  // Unauthenticated state - show login
   if (!isAuthenticated) {
     return <Login />;
   }
 
-  // Authenticated state - show Library Analytics dashboard
+  /**
+   * Handle tab changes — scroll to top on navigation
+   */
+  const handleTabChange = (tab: TabId): void => {
+    setActiveTab(tab);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  /**
+   * Render page content based on active tab
+   */
+  const renderPage = (): React.ReactNode => {
+    switch (activeTab) {
+      case "monthly":
+        return (
+          <MonthlyAnalytics onBackHome={() => handleTabChange("dashboard")} />
+        );
+      case "daily":
+        return (
+          <DailyAnalytics onBackHome={() => handleTabChange("dashboard")} />
+        );
+      case "upload":
+        return <Upload onBackHome={() => handleTabChange("dashboard")} />;
+      case "dashboard":
+      default:
+        return <Homepage />;
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      <Header onLogoClick={() => setCurrentPage("home")} />
+      <Header onLogoClick={() => handleTabChange("dashboard")} />
 
-      {/* User Profile Section */}
+      {/* User Profile Bar */}
       {user && (
         <div className="bg-white border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 py-3">
@@ -66,57 +91,19 @@ function AppContent() {
         </div>
       )}
 
+      {/* Tab Navigation */}
+      <TabNavigation activeTab={activeTab} onTabChange={handleTabChange} />
+
       {/* Main Content */}
-      <main className="flex-grow">
-        {renderPage(currentPage, {
-          setCurrentPage,
-        })}
-      </main>
+      <main className="flex-grow">{renderPage()}</main>
 
       <Footer />
     </div>
   );
-
-  /**
-   * Render the appropriate page based on current route
-   */
-  function renderPage(
-    page: Page,
-    handlers: {
-      setCurrentPage: (page: Page) => void;
-    },
-  ) {
-    switch (page) {
-      case "monthly":
-        return (
-          <MonthlyAnalytics
-            onBackHome={() => handlers.setCurrentPage("home")}
-          />
-        );
-      case "daily":
-        return (
-          <DailyAnalytics onBackHome={() => handlers.setCurrentPage("home")} />
-        );
-      case "upload":
-        return <Upload onBackHome={() => handlers.setCurrentPage("home")} />;
-      case "home":
-      default:
-        return (
-          <Homepage
-            onMonthlyClick={() => handlers.setCurrentPage("monthly")}
-            onDailyClick={() => handlers.setCurrentPage("daily")}
-            onUploadClick={() => handlers.setCurrentPage("upload")}
-          />
-        );
-    }
-  }
 }
 
 /**
- * App Component
- *
- * Root component that wraps the application with Auth0Provider
- * Handles all authentication configuration
+ * App Component — Root with Auth0Provider
  */
 function App() {
   return (
