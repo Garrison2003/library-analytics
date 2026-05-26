@@ -1,63 +1,72 @@
-# variables.tf - Define input variables for frontend infrastructure
+# variables.tf - All input variables for the project
+#
+# Existing variables (referenced in provider.tf, s3-frontend.tf)
+# are typically set in the Terraform Cloud workspace.
 
 variable "aws_region" {
-  description = "AWS region"
+  description = "AWS region for all resources"
   type        = string
   default     = "us-east-1"
 }
 
-variable "environment" {
-  description = "Environment name (dev, staging, prod)"
-  type        = string
-  default     = "prod"
-
-  validation {
-    condition     = contains(["dev", "staging", "prod"], var.environment)
-    error_message = "Environment must be dev, staging, or prod."
-  }
-}
-
 variable "project_name" {
-  description = "Project name"
+  description = "Project name used as a prefix for resource naming"
   type        = string
   default     = "library-analytics"
 }
 
+variable "environment" {
+  description = "Deployment environment (dev, staging, prod)"
+  type        = string
+  default     = "dev"
+}
+
+variable "tags" {
+  description = "Tags applied to all resources"
+  type        = map(string)
+  default     = {}
+}
+
 variable "domain_name" {
-  description = "Custom domain name for CloudFront"
+  description = "Custom domain name for CloudFront (leave empty to skip)"
   type        = string
   default     = ""
 }
 
 variable "acm_certificate_arn" {
-  description = "ARN of ACM certificate for custom domain"
+  description = "ACM certificate ARN for the custom domain (leave empty to skip)"
   type        = string
   default     = ""
 }
 
-variable "cache_ttl_default" {
-  description = "Default cache TTL in seconds"
+# ── Circulation Lambda variables ─────────────────────────────────────────────
+
+variable "circulation_upload_prefix" {
+  description = "S3 key prefix where .xlsm circulation files are uploaded"
+  type        = string
+  default     = "uploads/circulation/"
+}
+
+variable "circulation_processed_key" {
+  description = "S3 key where the processed circulation JSON is written"
+  type        = string
+  default     = "processed/circulation_data.json"
+}
+
+variable "circulation_lambda_memory" {
+  description = "Memory (MB) for the circulation Lambda"
   type        = number
-  default     = 3600
+  default     = 512
 }
 
-variable "cache_ttl_assets" {
-  description = "Cache TTL for static assets in seconds"
+variable "circulation_lambda_timeout" {
+  description = "Timeout (seconds) for the circulation Lambda"
   type        = number
-  default     = 31536000 # 1 year
+  default     = 60
 }
 
-variable "enable_versioning" {
-  description = "Enable S3 versioning for backup"
-  type        = bool
-  default     = true
-}
-
-variable "tags" {
-  description = "Common tags for all resources"
-  type        = map(string)
-  default = {
-    Project = "library-analytics"
-    Team    = "frontend"
-  }
+variable "cors_origin" {
+  description = "Allowed CORS origin for the circulation API"
+  type        = string
+  default     = "*"
 }
