@@ -10,7 +10,6 @@ resource "aws_lambda_function" "time_series_lambda" {
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 }
 
-
 # ── Circulation Lambda ───────────────────────────────────────────────────────
 
 # Layer: openpyxl for Excel parsing
