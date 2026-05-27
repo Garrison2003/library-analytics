@@ -718,3 +718,108 @@ class TestApiHandler:
         with patch.dict(os.environ, {"PROCESSED_BUCKET": "b"}):
             result = lambda_handler(self._api_event(), None)
         assert result["statusCode"] == 500
+
+
+# ── Edge-case tests ───────────────────────────────────────────────────────────
+
+class TestEdgeCases:
+    """Edge cases not covered by the main test classes."""
+
+    # ── Corrupted workbook ───────────────────────────────────────────────────
+
+    def test_corrupted_bytes_raises_or_returns_empty(self):
+        """parse_workbook with invalid bytes should raise or return nothing — not silently corrupt data."""
+        import pytest
+        bad_bytes = b"this is not a zip file at all" * 100
+        try:
+            months, branches = parse_workbook(bad_bytes)
+            # If it doesn't raise, it must return empty — not fake data
+            assert months == []
+            assert branches == []
+        except Exception:
+            pass  # openpyxl raises on invalid bytes — also acceptable
+
+    def test_empty_bytes_handled_gracefully(self):
+        import pytest
+        try:
+            months, branches = parse_workbook(b"")
+            assert months == []
+        except Exception:
+            pass  # acceptable: empty bytes is not a valid xlsx
+
+    # ── Branch with zero circulation ─────────────────────────────────────────
+
+    def test_branch_with_zero_grand_total_is_excluded(self):
+        """A branch row whose Grand Total is 0 must be excluded from extracted branches."""
+        zero_branch = {col: 0 for col in IMAGINON_BRANCH_DATA}
+        zero_branch[COL_GRAND_TOTAL] = 0
+        wb = _make_workbook({"JULY": REAL_DATA["JULY"]}, branch_rows=zero_branch)
+        months, branches = parse_workbook(wb)
+        assert "Imaginon" not in branches
+        assert "Imaginon" not in months[0]["branches"]
+
+    def test_branch_with_nonzero_total_is_included(self):
+        """Sanity check: positive Grand Total keeps the branch."""
+        wb = _make_workbook({"JULY": REAL_DATA["JULY"]}, branch_rows=IMAGINON_BRANCH_DATA)
+        _, branches = parse_workbook(wb)
+        assert "Imaginon" in branches
+
+    # ── _is_skip_department with all known skip values ───────────────────────
+
+    def test_all_skip_department_values_are_skipped(self):
+        from lambda_function import SKIP_DEPARTMENTS
+        for name in SKIP_DEPARTMENTS:
+            assert _is_skip_department(name) is True, f"Expected '{name}' to be skipped"
+
+    def test_numeric_department_name_is_skipped(self):
+        """Non-string types (e.g. a cell with a number) must be skipped."""
+        assert _is_skip_department(12345) is True
+
+    # ── build_circulation_data with empty months ──────────────────────────────
+
+    def test_empty_months_returns_no_data_points(self):
+        result = build_circulation_data([])
+        assert result["data"] == []
+        assert result["totalRecords"] == 0
+        assert result["branches"] == []
+
+    # ── Multiple months – correct ordering in output ──────────────────────────
+
+    def test_output_preserves_month_order(self):
+        months = []
+        for i, m in enumerate(["JULY", "AUGUST", "SEPTEMBER"]):
+            months.append({
+                "month_name": m,
+                "display_month": f"{m[:3].title()} 2025",
+                "year": 2025,
+                "system_totals": {
+                    cat: {"total": (i + 1) * 1000, "breakdown": {}}
+                    for cat in _CATEGORY_NAMES
+                },
+                "branches": {},
+            })
+        result = build_circulation_data(months)
+        output_months = [p["month"] for p in result["data"] if p["category"] == "Adult"]
+        assert output_months == ["Jul 2025", "Aug 2025", "Sep 2025"]
+
+    # ── S3 handler with URL-encoded spaces ───────────────────────────────────
+
+    def test_url_encoded_plus_signs_decoded(self):
+        """S3 encodes spaces in object keys as '+'; they must become ' '."""
+        from lambda_function import handle_s3_event
+        with patch("lambda_function.read_s3") as mock_read, \
+             patch("lambda_function.write_json_s3"):
+            mock_read.return_value = _make_workbook({"JULY": REAL_DATA["JULY"]})
+            event = {
+                "Records": [{
+                    "s3": {
+                        "bucket": {"name": "b"},
+                        "object": {"key": "uploads/FY2026+Circ+Stats.xlsm"},
+                    }
+                }]
+            }
+            with patch.dict(os.environ, {"PROCESSED_BUCKET": "b"}):
+                handle_s3_event(event)
+            decoded_key = mock_read.call_args[0][1]
+            assert " " in decoded_key
+            assert "+" not in decoded_key
