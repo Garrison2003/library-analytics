@@ -10,38 +10,17 @@ resource "aws_lambda_function" "time_series_lambda" {
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 }
 
-
 # ── Circulation Lambda ───────────────────────────────────────────────────────
 
 # Layer: openpyxl for Excel parsing
-# Build step runs pip install locally, then zips the result.
-# Re-triggers when layer/requirements.txt changes.
-resource "null_resource" "build_openpyxl_layer" {
-  triggers = {
-    requirements = filemd5("../lambdas/circulationLambda/layer/requirements.txt")
-  }
-
-  provisioner "local-exec" {
-    command = <<-EOT
-      rm -rf ../lambdas/circulationLambda/build/layer
-      mkdir -p ../lambdas/circulationLambda/build/layer/python
-      pip install \
-        -r ../lambdas/circulationLambda/layer/requirements.txt \
-        -t ../lambdas/circulationLambda/build/layer/python \
-        --quiet
-      cd ../lambdas/circulationLambda/build/layer
-      zip -r ../openpyxl_layer.zip python
-    EOT
-  }
-}
-
+# Built by the CI "Build openpyxl Layer" step; zip is placed at TF/openpyxl_layer.zip
+# before Terraform runs so the remote runner never needs zip/pip.
 resource "aws_lambda_layer_version" "openpyxl" {
   layer_name          = "${var.project_name}-openpyxl"
-  filename            = "../lambdas/circulationLambda/build/openpyxl_layer.zip"
+  filename            = "openpyxl_layer.zip"
   compatible_runtimes = ["python3.12"]
   description         = "openpyxl for Excel .xlsm parsing"
-
-  depends_on = [null_resource.build_openpyxl_layer]
+  source_code_hash    = filebase64sha256("openpyxl_layer.zip")
 }
 
 # Function

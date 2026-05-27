@@ -117,6 +117,17 @@ jobs:
           zip -j TF/circulation_lambda_payload.zip \
             lambdas/circulationLambda/lambda_function.py
 
+      - name: Build openpyxl Layer
+        run: |
+          mkdir -p lambdas/circulationLambda/build/layer/python
+          pip install \
+            -r lambdas/circulationLambda/layer/requirements.txt \
+            -t lambdas/circulationLambda/build/layer/python \
+            --quiet \
+            --only-binary=:all:
+          cd lambdas/circulationLambda/build/layer
+          zip -r ../../../../TF/openpyxl_layer.zip python
+
       # ── Terraform ───────────────────────────────────────────────────────────
 
       - name: Setup Terraform
