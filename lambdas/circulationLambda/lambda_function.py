@@ -21,6 +21,7 @@ import uuid
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
+from urllib.parse import unquote_plus
 
 import boto3
 import openpyxl
@@ -337,7 +338,7 @@ def handle_s3_event(event: dict) -> dict:
     """S3 PUT trigger. Downloads .xlsm, parses it, writes processed JSON."""
     record = event["Records"][0]["s3"]
     source_bucket = record["bucket"]["name"]
-    source_key = record["object"]["key"]
+    source_key = unquote_plus(record["object"]["key"])
 
     logger.info("Processing s3://%s/%s", source_bucket, source_key)
 
