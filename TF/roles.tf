@@ -61,6 +61,12 @@ resource "aws_iam_role_policy" "circulation_lambda" {
         Resource = "arn:aws:logs:*:*:*"
       },
       {
+        Sid      = "S3ListBucket"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = aws_s3_bucket.circulation.arn
+      },
+      {
         Sid      = "S3ReadUploads"
         Effect   = "Allow"
         Action   = ["s3:GetObject"]

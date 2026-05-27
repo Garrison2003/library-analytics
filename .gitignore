@@ -6,5 +6,10 @@ TF/backend.tf
 nul
 **/nul
 
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
 # Claude Code local settings (per-developer, not shared)
 .claude/settings.local.json
