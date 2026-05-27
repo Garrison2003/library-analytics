@@ -178,7 +178,7 @@ const CirculationTrends: React.FC<CirculationTrendsProps> = ({
         );
 
         if (!response.ok) {
-          throw new Error(`API error: ${response.statusCode}`);
+          throw new Error(`API error: ${response.status}`);
         }
 
         const json = await response.json();
