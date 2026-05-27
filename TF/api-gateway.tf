@@ -120,5 +120,5 @@ resource "aws_api_gateway_deployment" "circulation" {
 resource "aws_api_gateway_stage" "circulation" {
   deployment_id = aws_api_gateway_deployment.circulation.id
   rest_api_id   = aws_api_gateway_rest_api.circulation.id
-  stage_name    = "prod"
+  stage_name    = var.environment
 }
