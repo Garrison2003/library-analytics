@@ -19,7 +19,7 @@ class APIService {
   private timeout: number = 30000; // 30 seconds
 
   constructor(
-    baseURL: string = process.env.VITE_API_URL || "http://localhost:3000/api",
+    baseURL: string = import.meta.env.VITE_API_URL || "http://localhost:3000/api",
   ) {
     this.baseURL = baseURL;
   }
