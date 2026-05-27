@@ -117,7 +117,7 @@ export default function Upload({ onBackHome }: UploadProps) {
             ...prev,
             isValidating: false,
             selectedFile: file,
-            validationWarnings: validationResult.warnings,
+            validationWarnings: validationResult.warnings ?? [],
             validationError: null,
           }));
           return;
