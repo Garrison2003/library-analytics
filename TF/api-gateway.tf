@@ -122,3 +122,104 @@ resource "aws_api_gateway_stage" "circulation" {
   rest_api_id   = aws_api_gateway_rest_api.circulation.id
   stage_name    = var.environment
 }
+
+# ── API Gateway Lambda Permission (Upload) ───────────────────────────────
+
+resource "aws_lambda_permission" "api_gateway_upload" {
+  statement_id  = "AllowAPIGatewayUpload"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.upload_handler.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.library_api.execution_arn}/*/*"
+}
+
+# ── API Gateway /upload Resource ─────────────────────────────────────────
+
+resource "aws_api_gateway_resource" "upload" {
+  rest_api_id = aws_api_gateway_rest_api.library_api.id
+  parent_id   = aws_api_gateway_rest_api.library_api.root_resource_id
+  path_part   = "upload"
+}
+
+# ── API Gateway POST /upload Method ──────────────────────────────────────
+
+resource "aws_api_gateway_method" "upload_post" {
+  rest_api_id      = aws_api_gateway_rest_api.library_api.id
+  resource_id      = aws_api_gateway_resource.upload.id
+  http_method      = "POST"
+  authorization    = "NONE"
+  request_parameters = {
+    "method.request.header.Content-Type" = true
+  }
+}
+
+# ── API Gateway Integration (POST /upload → Lambda) ──────────────────────
+
+resource "aws_api_gateway_integration" "upload_post_lambda" {
+  rest_api_id      = aws_api_gateway_rest_api.library_api.id
+  resource_id      = aws_api_gateway_resource.upload.id
+  http_method      = aws_api_gateway_method.upload_post.http_method
+  type             = "AWS_PROXY"
+  integration_http_method = "POST"
+  uri              = aws_lambda_function.upload_handler.invoke_arn
+}
+
+# ── API Gateway POST /upload/validate Resource ──────────────────────────
+
+resource "aws_api_gateway_resource" "upload_validate" {
+  rest_api_id = aws_api_gateway_rest_api.library_api.id
+  parent_id   = aws_api_gateway_resource.upload.id
+  path_part   = "validate"
+}
+
+# ── API Gateway POST /upload/validate Method ────────────────────────────
+
+resource "aws_api_gateway_method" "upload_validate_post" {
+  rest_api_id      = aws_api_gateway_rest_api.library_api.id
+  resource_id      = aws_api_gateway_resource.upload_validate.id
+  http_method      = "POST"
+  authorization    = "NONE"
+  request_parameters = {
+    "method.request.header.Content-Type" = true
+  }
+}
+
+# ── API Gateway Integration (POST /upload/validate → Lambda) ─────────────
+
+resource "aws_api_gateway_integration" "upload_validate_post_lambda" {
+  rest_api_id      = aws_api_gateway_rest_api.library_api.id
+  resource_id      = aws_api_gateway_resource.upload_validate.id
+  http_method      = aws_api_gateway_method.upload_validate_post.http_method
+  type             = "AWS_PROXY"
+  integration_http_method = "POST"
+  uri              = aws_lambda_function.upload_handler.invoke_arn
+}
+
+# ── API Gateway Deployment ──────────────────────────────────────────────
+# Add these resources to your existing API Gateway deployment section
+
+resource "aws_api_gateway_deployment" "upload_endpoints" {
+  rest_api_id = aws_api_gateway_rest_api.library_api.id
+
+  triggers = {
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_integration.upload_post_lambda.id,
+      aws_api_gateway_integration.upload_validate_post_lambda.id,
+    ]))
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  depends_on = [
+    aws_api_gateway_integration.upload_post_lambda,
+    aws_api_gateway_integration.upload_validate_post_lambda,
+  ]
+}
+
+resource "aws_api_gateway_stage" "upload" {
+  deployment_id = aws_api_gateway_deployment.upload_endpoints.id
+  rest_api_id   = aws_api_gateway_rest_api.library_api.id
+  stage_name    = var.environment
+}

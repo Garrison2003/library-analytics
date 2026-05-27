@@ -149,13 +149,3 @@ resource "aws_iam_role_policy" "upload_lambda_logs_policy" {
     }]
   })
 }
-
-# ── API Gateway Lambda Permission (Upload) ───────────────────────────────
-
-resource "aws_lambda_permission" "api_gateway_upload" {
-  statement_id  = "AllowAPIGatewayUpload"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.upload_handler.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.library_api.execution_arn}/*/*"
-}
