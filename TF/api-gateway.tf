@@ -144,10 +144,10 @@ resource "aws_api_gateway_resource" "upload" {
 # ── API Gateway POST /upload Method ──────────────────────────────────────
 
 resource "aws_api_gateway_method" "upload_post" {
-  rest_api_id      = aws_api_gateway_rest_api.library_api.id
-  resource_id      = aws_api_gateway_resource.upload.id
-  http_method      = "POST"
-  authorization    = "NONE"
+  rest_api_id   = aws_api_gateway_rest_api.library_api.id
+  resource_id   = aws_api_gateway_resource.upload.id
+  http_method   = "POST"
+  authorization = "NONE"
   request_parameters = {
     "method.request.header.Content-Type" = true
   }
@@ -156,12 +156,12 @@ resource "aws_api_gateway_method" "upload_post" {
 # ── API Gateway Integration (POST /upload → Lambda) ──────────────────────
 
 resource "aws_api_gateway_integration" "upload_post_lambda" {
-  rest_api_id      = aws_api_gateway_rest_api.library_api.id
-  resource_id      = aws_api_gateway_resource.upload.id
-  http_method      = aws_api_gateway_method.upload_post.http_method
-  type             = "AWS_PROXY"
+  rest_api_id             = aws_api_gateway_rest_api.library_api.id
+  resource_id             = aws_api_gateway_resource.upload.id
+  http_method             = aws_api_gateway_method.upload_post.http_method
+  type                    = "AWS_PROXY"
   integration_http_method = "POST"
-  uri              = aws_lambda_function.upload_handler.invoke_arn
+  uri                     = aws_lambda_function.upload_handler.invoke_arn
 }
 
 # ── API Gateway POST /upload/validate Resource ──────────────────────────
@@ -175,10 +175,10 @@ resource "aws_api_gateway_resource" "upload_validate" {
 # ── API Gateway POST /upload/validate Method ────────────────────────────
 
 resource "aws_api_gateway_method" "upload_validate_post" {
-  rest_api_id      = aws_api_gateway_rest_api.library_api.id
-  resource_id      = aws_api_gateway_resource.upload_validate.id
-  http_method      = "POST"
-  authorization    = "NONE"
+  rest_api_id   = aws_api_gateway_rest_api.library_api.id
+  resource_id   = aws_api_gateway_resource.upload_validate.id
+  http_method   = "POST"
+  authorization = "NONE"
   request_parameters = {
     "method.request.header.Content-Type" = true
   }
@@ -187,12 +187,12 @@ resource "aws_api_gateway_method" "upload_validate_post" {
 # ── API Gateway Integration (POST /upload/validate → Lambda) ─────────────
 
 resource "aws_api_gateway_integration" "upload_validate_post_lambda" {
-  rest_api_id      = aws_api_gateway_rest_api.library_api.id
-  resource_id      = aws_api_gateway_resource.upload_validate.id
-  http_method      = aws_api_gateway_method.upload_validate_post.http_method
-  type             = "AWS_PROXY"
+  rest_api_id             = aws_api_gateway_rest_api.library_api.id
+  resource_id             = aws_api_gateway_resource.upload_validate.id
+  http_method             = aws_api_gateway_method.upload_validate_post.http_method
+  type                    = "AWS_PROXY"
   integration_http_method = "POST"
-  uri              = aws_lambda_function.upload_handler.invoke_arn
+  uri                     = aws_lambda_function.upload_handler.invoke_arn
 }
 
 # ── API Gateway Deployment ──────────────────────────────────────────────

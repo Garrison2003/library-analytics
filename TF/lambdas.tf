@@ -47,7 +47,7 @@ resource "aws_cloudwatch_log_group" "circulation_lambda" {
   name              = "/aws/lambda/${aws_lambda_function.circulation_lambda.function_name}"
   retention_in_days = 7
 
-   tags = {
+  tags = {
     Name = "${var.project_name}-upload-lambda-logs"
   }
 }
