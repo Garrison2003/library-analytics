@@ -531,10 +531,21 @@ class TestApiHandler:
 
     @patch("lambda_function.read_json_s3")
     def test_no_such_key_returns_404(self, mock_read):
-        # Simulate S3 NoSuchKey by raising the client exception shape
         from botocore.exceptions import ClientError
         mock_read.side_effect = ClientError(
             {"Error": {"Code": "NoSuchKey", "Message": "The specified key does not exist."}},
+            "GetObject",
+        )
+        with patch.dict(os.environ, {"PROCESSED_BUCKET": "b"}):
+            result = lambda_handler(self._api_event(), None)
+        assert result["statusCode"] == 404
+
+    @patch("lambda_function.read_json_s3")
+    def test_access_denied_returns_404(self, mock_read):
+        # S3 returns AccessDenied instead of NoSuchKey when ListBucket is missing
+        from botocore.exceptions import ClientError
+        mock_read.side_effect = ClientError(
+            {"Error": {"Code": "AccessDenied", "Message": "Access Denied"}},
             "GetObject",
         )
         with patch.dict(os.environ, {"PROCESSED_BUCKET": "b"}):
