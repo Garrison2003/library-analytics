@@ -94,17 +94,20 @@ class APIService {
   }
 
   /**
-   * Upload circulation data file
+   * Upload file to S3 with type-based routing
    */
   async uploadFile(
     file: File,
-    options?: { category?: string; overwrite?: boolean },
+    options?: { category?: string; overwrite?: boolean; fileType?: string },
   ): Promise<APIResponse<FileUploadResponse>> {
     const formData = new FormData();
     formData.append("file", file);
 
     if (options?.category) {
       formData.append("category", options.category);
+    }
+    if (options?.fileType) {
+      formData.append("fileType", options.fileType);
     }
     if (options?.overwrite !== undefined) {
       formData.append("overwrite", String(options.overwrite));
@@ -124,6 +127,37 @@ class APIService {
       return await response.json();
     } catch (error) {
       console.error("File Upload Error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Validate a file without uploading
+   */
+  async validateFile(
+    file: File,
+    fileType?: string,
+  ): Promise<APIResponse<{ valid: boolean; errors: string[] }>> {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    if (fileType) {
+      formData.append("fileType", fileType);
+    }
+
+    try {
+      const response = await fetch(`${this.baseURL}/upload/validate`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Validation failed: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("File Validation Error:", error);
       throw error;
     }
   }
