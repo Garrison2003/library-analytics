@@ -24,6 +24,7 @@ from typing import Any
 
 import boto3
 import openpyxl
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -374,8 +375,12 @@ def handle_api_request(event: dict) -> dict:
 
     try:
         payload = read_json_s3(bucket, key)
-    except s3.exceptions.NoSuchKey:
-        return _api_err(404, "NOT_FOUND", "No data available. Upload a file first.")
+    except ClientError as exc:
+        code = exc.response["Error"]["Code"]
+        if code in ("NoSuchKey", "404"):
+            return _api_err(404, "NOT_FOUND", "No data available. Upload a file first.")
+        logger.exception("S3 error reading processed data")
+        return _api_err(500, "INTERNAL_ERROR", f"Storage error: {code}")
     except Exception as exc:
         logger.exception("Error reading processed data")
         return _api_err(500, "INTERNAL_ERROR", str(exc))
