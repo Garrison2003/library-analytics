@@ -87,3 +87,75 @@ resource "aws_iam_role_policy" "circulation_lambda" {
     ]
   })
 }
+
+# ── Upload Handler Lambda role ──────────────────────────────────────────────────
+
+resource "aws_iam_role" "upload_lambda_role" {
+  name = "${var.project_name}-upload-lambda-role-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+# ── IAM Policy for Upload Lambda (S3 Access) ─────────────────────────────
+
+resource "aws_iam_role_policy" "upload_lambda_s3_policy" {
+  name = "${var.project_name}-upload-lambda-s3-${var.environment}"
+  role = aws_iam_role.upload_lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.circulation.arn,
+          "${aws_s3_bucket.circulation.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# ── IAM Policy for Upload Lambda (CloudWatch Logs) ──────────────────────
+
+resource "aws_iam_role_policy" "upload_lambda_logs_policy" {
+  name = "${var.project_name}-upload-lambda-logs-${var.environment}"
+  role = aws_iam_role.upload_lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ]
+      Resource = "arn:aws:logs:*:*:*"
+    }]
+  })
+}
+
+# ── API Gateway Lambda Permission (Upload) ───────────────────────────────
+
+resource "aws_lambda_permission" "api_gateway_upload" {
+  statement_id  = "AllowAPIGatewayUpload"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.upload_handler.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.library_api.execution_arn}/*/*"
+}
