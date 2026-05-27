@@ -1,28 +1,17 @@
 """
-Library Analytics – Circulation Statistics Lambda
+Library Analytics – Circulation Statistics Lambda (with Branch Support)
 
 Parses FY circulation .xlsm files uploaded to S3 and serves processed
 graph data to the frontend dashboard via API Gateway.
 
+NEW: Extracts and returns branch-level data. API supports filtering by branch.
+
 Trigger:  S3 PUT on uploads/circulation/*.xlsm
-API:      GET /circulation?category={name}
+API:      GET /circulation?category={name}&branch={name}
 
-The response follows the existing frontend contract:
-
-    APIResponse<CirculationData>
-    ├── success: bool
-    ├── data
-    │   ├── data: CirculationDataPoint[]   ← { category, month, year, circulation }
-    │   ├── lastUpdated: ISO timestamp
-    │   └── totalRecords: int
-    └── timestamp: ISO timestamp
-
-Five graph categories are produced from the Excel totals row:
-    Juvenile Fiction  →  TOTAL JUVENILE  (col I)
-    Young Adult       →  TOTAL YA        (col M)
-    Adult             →  TOTAL ADULT     (col E)
-    Non-Print         →  TOTAL NONPRINT  (col V)
-    Total Circulation →  GRAND TOTAL     (col X)
+Response includes:
+  - branches: list of all branches with data
+  - data: CirculationDataPoint[] filtered by optional category/branch
 """
 
 import json
@@ -55,14 +44,13 @@ MONTH_ABBR = {
     "APRIL": "Apr", "MAY": "May", "JUNE": "Jun",
 }
 
-# 0-based column indices in the Total row (from openpyxl values_only tuple)
+# 0-based column indices in data rows
 COL_TOTAL_ADULT     = 4
 COL_TOTAL_JUVENILE  = 8
 COL_TOTAL_YA        = 12
 COL_TOTAL_NONPRINT  = 21
 COL_GRAND_TOTAL     = 23
 
-# Maps frontend graph title → column index in Total row
 CATEGORY_MAP = {
     "Juvenile Fiction":  COL_TOTAL_JUVENILE,
     "Young Adult":       COL_TOTAL_YA,
@@ -73,11 +61,17 @@ CATEGORY_MAP = {
 
 PROCESSED_KEY = "processed/circulation_data.json"
 
+# Branch names to skip (system totals, headers, etc.)
+SKIP_DEPARTMENTS = {
+    "Department", "Charlotte Mecklenburg Library", "CIRCULATION", "Page 1",
+    "Total", "TOTAL ADULT", "TOTAL JUVENILE", "TOTAL YOUNG ADULT", 
+    "TOTAL NONPRINT", "TOTAL BOOKS", "TOTAL PRINT & NONPRINT",
+}
+
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _env(name: str, fallback: str = "") -> str:
-    """Read an env var at call time so tests can patch os.environ."""
     return os.environ.get(name, fallback)
 
 
@@ -94,102 +88,188 @@ def _safe_int(val: Any) -> int:
         return 0
 
 
+def _is_skip_department(name: str) -> bool:
+    """Check if a department name should be skipped (system total, header, etc.)"""
+    if not name or not isinstance(name, str):
+        return True
+    name_upper = name.upper().strip()
+    return any(skip.upper() in name_upper for skip in SKIP_DEPARTMENTS)
+
+
 # ── Excel Parsing ────────────────────────────────────────────────────────────
 
-def _find_total_row(sheet) -> tuple | None:
+def _find_header_row(sheet) -> int:
+    """Find the row containing 'Department' header."""
+    for i, row in enumerate(sheet.iter_rows(values_only=True)):
+        if row and row[0] and str(row[0]).strip() == "Department":
+            return i
+    return -1
+
+
+def _extract_departments(sheet) -> list[str]:
+    """Extract all unique branch/department names from a sheet."""
+    header_idx = _find_header_row(sheet)
+    if header_idx < 0:
+        return []
+
+    departments = set()
+    for i, row in enumerate(sheet.iter_rows(values_only=True)):
+        if i <= header_idx:
+            continue
+        if row and row[0]:
+            dept_name = str(row[0]).strip()
+            if not _is_skip_department(dept_name):
+                departments.add(dept_name)
+
+    return sorted(list(departments))
+
+
+def _find_totals_row(sheet) -> tuple | None:
+    """Find the system-wide TOTAL row (for backward compatibility)."""
     for row in sheet.iter_rows(values_only=True):
         if row and row[0] and str(row[0]).strip() == "Total":
             return row
     return None
 
 
-def _detect_year(sheet, month_name: str) -> int:
-    """Extract the calendar year from the sheet header (e.g. 'JULY 2025')."""
-    for row in sheet.iter_rows(min_row=1, max_row=5, values_only=True):
-        for cell in row:
-            if cell and isinstance(cell, str) and month_name in cell.upper():
-                for token in cell.split():
-                    if token.isdigit() and len(token) == 4:
-                        return int(token)
-    # Fallback: infer from fiscal year convention (Jul-Dec = first year)
-    return datetime.now(timezone.utc).year
+def _extract_branch_data(sheet, branch_name: str) -> dict | None:
+    """Extract data for a specific branch from a sheet."""
+    header_idx = _find_header_row(sheet)
+    if header_idx < 0:
+        return None
+
+    for row in sheet.iter_rows(values_only=True):
+        if row and row[0] and str(row[0]).strip() == branch_name:
+            return {
+                "adult":     _safe_int(row[COL_TOTAL_ADULT]),
+                "juvenile":  _safe_int(row[COL_TOTAL_JUVENILE]),
+                "ya":        _safe_int(row[COL_TOTAL_YA]),
+                "nonprint":  _safe_int(row[COL_TOTAL_NONPRINT]),
+                "grand_total": _safe_int(row[COL_GRAND_TOTAL]),
+            }
+    return None
 
 
-def parse_workbook(file_bytes: bytes) -> list[dict]:
+def parse_workbook(file_bytes: bytes) -> tuple[list[dict], list[str]]:
     """
-    Parse the .xlsm and return a list of month records in fiscal-year order.
-    Each record: { month_name, display_month, year, totals: {category: int} }
-    Only months with a non-zero grand total are included.
+    Parse the .xlsm and return:
+      1. List of month records in fiscal-year order with branch data
+      2. List of unique branch names across all months
+
+    Each month record: {
+      month_name, display_month, year,
+      system_totals: {category: int},
+      branches: {branch_name: {category: int}}
+    }
     """
     wb = openpyxl.load_workbook(
         BytesIO(file_bytes), read_only=True, data_only=True, keep_links=False,
     )
 
     result = []
+    all_branches = set()
+
     for month_name in FY_MONTHS:
         if month_name not in wb.sheetnames:
             continue
 
         sheet = wb[month_name]
-        total_row = _find_total_row(sheet)
+        total_row = _find_totals_row(sheet)
         if total_row is None:
-            logger.warning("No Total row in sheet %s", month_name)
             continue
 
         grand_total = _safe_int(total_row[COL_GRAND_TOTAL])
         if grand_total == 0:
             continue
 
+        # Extract system totals
         year = _detect_year(sheet, month_name)
         abbr = MONTH_ABBR[month_name]
-        display = f"{abbr} {year}"  # "Jul 2025"
+        display = f"{abbr} {year}"
 
-        totals = {}
+        system_totals = {}
         for category, col_idx in CATEGORY_MAP.items():
-            totals[category] = _safe_int(total_row[col_idx])
+            system_totals[category] = _safe_int(total_row[col_idx])
+
+        # Extract branch data
+        branches = {}
+        for dept_name in _extract_departments(sheet):
+            dept_data = _extract_branch_data(sheet, dept_name)
+            if dept_data and dept_data["grand_total"] > 0:
+                branches[dept_name] = {
+                    "Juvenile Fiction": dept_data["juvenile"],
+                    "Young Adult":      dept_data["ya"],
+                    "Adult":            dept_data["adult"],
+                    "Non-Print":        dept_data["nonprint"],
+                    "Total Circulation": dept_data["grand_total"],
+                }
+                all_branches.add(dept_name)
 
         result.append({
             "month_name": month_name,
             "display_month": display,
             "year": year,
-            "totals": totals,
+            "system_totals": system_totals,
+            "branches": branches,
         })
 
     wb.close()
+    return result[-12:], sorted(list(all_branches))
 
-    # Keep only the most recent 12 months
-    return result[-12:]
+
+def _detect_year(sheet, month_name: str) -> int:
+    """Extract the calendar year from the sheet header."""
+    for row in sheet.iter_rows(min_row=1, max_row=5, values_only=True):
+        for cell in row:
+            if cell and isinstance(cell, str) and month_name in cell.upper():
+                for token in cell.split():
+                    if token.isdigit() and len(token) == 4:
+                        return int(token)
+    return datetime.now(timezone.utc).year
 
 
 # ── Payload Builder ──────────────────────────────────────────────────────────
 
-def build_circulation_data(months: list[dict]) -> dict:
+def build_circulation_data(months: list[dict], branch_filter: str = "") -> dict:
     """
-    Convert parsed month records into the CirculationData shape expected by
-    the frontend:
-
-        {
-          data: CirculationDataPoint[],
-          lastUpdated: str,
-          totalRecords: int
-        }
-
-    One CirculationDataPoint per (category × month) combination.
+    Convert parsed month records into CirculationData shape.
+    
+    If branch_filter is empty or "System", use system totals.
+    If branch_filter is a branch name, use that branch's data.
     """
     now = datetime.now(timezone.utc).isoformat()
     points: list[dict] = []
+    all_branches = set()
 
+    # Collect all unique branches
     for month_rec in months:
-        for category, value in month_rec["totals"].items():
-            points.append({
-                "category":    category,
-                "month":       month_rec["display_month"],
-                "year":        month_rec["year"],
-                "circulation": value,
-            })
+        all_branches.update(month_rec["branches"].keys())
+
+    # Extract data based on filter
+    for month_rec in months:
+        if not branch_filter or branch_filter == "System":
+            # Use system totals
+            for category, value in month_rec["system_totals"].items():
+                points.append({
+                    "category": category,
+                    "month": month_rec["display_month"],
+                    "year": month_rec["year"],
+                    "circulation": value,
+                })
+        elif branch_filter in month_rec["branches"]:
+            # Use branch data
+            for category, value in month_rec["branches"][branch_filter].items():
+                points.append({
+                    "category": category,
+                    "month": month_rec["display_month"],
+                    "year": month_rec["year"],
+                    "circulation": value,
+                })
 
     return {
         "data": points,
+        "branches": sorted(list(all_branches)),
+        "selectedBranch": branch_filter or "System",
         "lastUpdated": now,
         "totalRecords": len(points),
     }
@@ -253,10 +333,7 @@ def _api_response(status: int, body: dict) -> dict:
 # ── Handlers ─────────────────────────────────────────────────────────────────
 
 def handle_s3_event(event: dict) -> dict:
-    """
-    S3 PUT trigger.  Downloads the .xlsm, parses it, writes processed JSON.
-    Repeated uploads overwrite the same key — idempotent by design.
-    """
+    """S3 PUT trigger. Downloads .xlsm, parses it, writes processed JSON."""
     record = event["Records"][0]["s3"]
     source_bucket = record["bucket"]["name"]
     source_key = record["object"]["key"]
@@ -264,13 +341,14 @@ def handle_s3_event(event: dict) -> dict:
     logger.info("Processing s3://%s/%s", source_bucket, source_key)
 
     file_bytes = read_s3(source_bucket, source_key)
-    months = parse_workbook(file_bytes)
+    months, branches = parse_workbook(file_bytes)
 
     if not months:
         logger.error("No valid month data found")
         return {"statusCode": 400, "body": "No circulation data in workbook"}
 
-    payload = build_circulation_data(months)
+    # Build with system totals (default view)
+    payload = build_circulation_data(months, branch_filter="System")
 
     dest_bucket = _env("PROCESSED_BUCKET", source_bucket)
     dest_key = _env("PROCESSED_KEY", PROCESSED_KEY)
@@ -281,17 +359,13 @@ def handle_s3_event(event: dict) -> dict:
         "body": json.dumps({
             "message": "Circulation data processed",
             "totalRecords": payload["totalRecords"],
+            "branchesFound": len(branches),
         }),
     }
 
 
 def handle_api_request(event: dict) -> dict:
-    """
-    GET /circulation?category={name}
-
-    Returns CirculationDataPoint[] for the requested category,
-    or all categories if no filter is provided.
-    """
+    """GET /circulation?category={name}&branch={name}"""
     bucket = _env("PROCESSED_BUCKET")
     if not bucket:
         return _api_err(500, "CONFIG_ERROR", "PROCESSED_BUCKET not set")
@@ -301,21 +375,26 @@ def handle_api_request(event: dict) -> dict:
     try:
         payload = read_json_s3(bucket, key)
     except s3.exceptions.NoSuchKey:
-        return _api_err(404, "NOT_FOUND", "No data available. Upload a circulation file first.")
+        return _api_err(404, "NOT_FOUND", "No data available. Upload a file first.")
     except Exception as exc:
         logger.exception("Error reading processed data")
         return _api_err(500, "INTERNAL_ERROR", str(exc))
 
-    # Optional category filter
+    # Query parameters
     qs = event.get("queryStringParameters") or {}
     category_filter = qs.get("category")
+    branch_filter = qs.get("branch", "System")
 
+    # Filter by category if provided
     if category_filter:
         payload["data"] = [
             pt for pt in payload["data"]
             if pt["category"] == category_filter
         ]
-        payload["totalRecords"] = len(payload["data"])
+
+    # Include branch info
+    payload["selectedBranch"] = branch_filter
+    payload["totalRecords"] = len(payload["data"])
 
     return _api_ok(payload)
 
@@ -323,11 +402,7 @@ def handle_api_request(event: dict) -> dict:
 # ── Entrypoint ───────────────────────────────────────────────────────────────
 
 def lambda_handler(event: dict, context: Any) -> dict:
-    """
-    Routes based on event source:
-      • S3 event  → parse workbook, write JSON
-      • API GW    → return processed JSON (with optional ?category= filter)
-    """
+    """Routes based on event source."""
     logger.info("Event: %s", json.dumps(event, default=str)[:500])
 
     if "Records" in event and event["Records"][0].get("eventSource") == "aws:s3":
