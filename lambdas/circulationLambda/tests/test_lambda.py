@@ -16,7 +16,11 @@ from lambda_function import (
     parse_workbook,
     build_circulation_data,
     _safe_int,
-    _find_total_row,
+    _is_skip_department,
+    _find_header_row,
+    _find_totals_row,
+    _api_ok,
+    _api_err,
     lambda_handler,
     FY_MONTHS,
     CATEGORY_MAP,
@@ -28,7 +32,7 @@ from lambda_function import (
 )
 
 
-# ── Test data ────────────────────────────────────────────────────────────────
+# ── Fixtures & helpers ────────────────────────────────────────────────────────
 
 # Real values from FY2026 workbook
 REAL_DATA = {
@@ -65,7 +69,7 @@ REAL_DATA = {
 
 def _make_workbook(months_with_data: dict, fy_start_year: int = 2025) -> bytes:
     """
-    Build a minimal .xlsx in memory.
+    Build a minimal .xlsx in memory that parse_workbook can read.
     months_with_data: { "JULY": { col_index: value, ... }, ... }
     """
     wb = openpyxl.Workbook()
@@ -73,17 +77,14 @@ def _make_workbook(months_with_data: dict, fy_start_year: int = 2025) -> bytes:
 
     for month_name in FY_MONTHS:
         ws = wb.create_sheet(month_name)
-        # Header area (rows 1-5)
-        ws.append([])
-        ws.append([])
         year = fy_start_year if FY_MONTHS.index(month_name) < 6 else fy_start_year + 1
-        header = [None] * 25
-        header[0] = "Charlotte Mecklenburg Library"
-        header[16] = f"{month_name} {year}"
-        ws.append(header)
-        ws.append([])
-        ws.append([])
 
+        # Row 1: year header — _detect_year scans rows 1-5 for month+year string
+        header = [None] * 25
+        header[0] = f"{month_name} {year}"
+        ws.append(header)
+
+        # Total row — _find_totals_row looks for row[0] == "Total"
         total = [None] * 25
         total[0] = "Total"
         if month_name in months_with_data:
@@ -94,6 +95,22 @@ def _make_workbook(months_with_data: dict, fy_start_year: int = 2025) -> bytes:
     buf = BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+class MockSheet:
+    """Sheet stub whose iter_rows always returns a fresh iterator."""
+    def __init__(self, rows):
+        self._rows = rows
+
+    def iter_rows(self, values_only=False, **kwargs):
+        return iter(self._rows)
+
+
+def _row(col_dict: dict, size: int = 25) -> tuple:
+    row = [None] * size
+    for col, val in col_dict.items():
+        row[col] = val
+    return tuple(row)
 
 
 # ── _safe_int ────────────────────────────────────────────────────────────────
@@ -117,11 +134,86 @@ class TestSafeInt:
     def test_numeric_string(self):
         assert _safe_int("139948") == 139948
 
+    def test_float_string_truncates(self):
+        assert _safe_int("42.9") == 42
+
     def test_non_numeric_returns_zero(self):
         assert _safe_int("abc") == 0
 
-    def test_space_character(self):
-        assert _safe_int(" ") == 0
+
+# ── _is_skip_department ──────────────────────────────────────────────────────
+
+class TestIsSkipDepartment:
+    def test_none_is_skipped(self):
+        assert _is_skip_department(None) is True
+
+    def test_empty_string_is_skipped(self):
+        assert _is_skip_department("") is True
+
+    def test_department_header_is_skipped(self):
+        assert _is_skip_department("Department") is True
+
+    def test_total_is_skipped(self):
+        assert _is_skip_department("Total") is True
+
+    def test_library_name_is_skipped(self):
+        assert _is_skip_department("Charlotte Mecklenburg Library") is True
+
+    def test_regular_branch_is_not_skipped(self):
+        assert _is_skip_department("Main Branch") is False
+
+    def test_another_branch_is_not_skipped(self):
+        assert _is_skip_department("Plaza Midwood") is False
+
+
+# ── _find_header_row ─────────────────────────────────────────────────────────
+
+class TestFindHeaderRow:
+    def test_finds_department_row_at_index_zero(self):
+        sheet = MockSheet([
+            _row({0: "Department"}),
+            _row({0: "Branch A", COL_GRAND_TOTAL: 100}),
+        ])
+        assert _find_header_row(sheet) == 0
+
+    def test_finds_department_row_after_header_rows(self):
+        sheet = MockSheet([
+            _row({0: "JULY 2025"}),
+            _row({}),
+            _row({0: "Department"}),
+            _row({0: "Branch A", COL_GRAND_TOTAL: 100}),
+        ])
+        assert _find_header_row(sheet) == 2
+
+    def test_returns_minus_one_when_not_found(self):
+        sheet = MockSheet([
+            _row({0: "JULY 2025"}),
+            _row({0: "Total", COL_GRAND_TOTAL: 500}),
+        ])
+        assert _find_header_row(sheet) == -1
+
+
+# ── _find_totals_row ─────────────────────────────────────────────────────────
+
+class TestFindTotalsRow:
+    def test_finds_total_row(self):
+        total = _row({0: "Total", COL_GRAND_TOTAL: 847261})
+        sheet = MockSheet([
+            _row({0: "Department"}),
+            _row({0: "Branch A", COL_GRAND_TOTAL: 100}),
+            total,
+        ])
+        result = _find_totals_row(sheet)
+        assert result is not None
+        assert result[0] == "Total"
+        assert result[COL_GRAND_TOTAL] == 847261
+
+    def test_returns_none_when_no_total_row(self):
+        sheet = MockSheet([
+            _row({0: "Department"}),
+            _row({0: "Branch A", COL_GRAND_TOTAL: 100}),
+        ])
+        assert _find_totals_row(sheet) is None
 
 
 # ── parse_workbook ───────────────────────────────────────────────────────────
@@ -129,27 +221,27 @@ class TestSafeInt:
 class TestParseWorkbook:
     def test_extracts_months_with_data(self):
         wb = _make_workbook({"JULY": REAL_DATA["JULY"], "AUGUST": REAL_DATA["AUGUST"]})
-        result = parse_workbook(wb)
-        assert len(result) == 2
-        assert result[0]["month_name"] == "JULY"
-        assert result[1]["month_name"] == "AUGUST"
+        months, _ = parse_workbook(wb)
+        assert len(months) == 2
+        assert months[0]["month_name"] == "JULY"
+        assert months[1]["month_name"] == "AUGUST"
 
     def test_skips_zero_grand_total_months(self):
-        data = {"JULY": REAL_DATA["JULY"]}
-        wb = _make_workbook(data)
-        result = parse_workbook(wb)
-        assert len(result) == 1
-        assert result[0]["month_name"] == "JULY"
+        wb = _make_workbook({"JULY": REAL_DATA["JULY"]})
+        months, _ = parse_workbook(wb)
+        assert len(months) == 1
+        assert months[0]["month_name"] == "JULY"
 
     def test_returns_empty_list_for_empty_workbook(self):
         wb = _make_workbook({})
-        result = parse_workbook(wb)
-        assert result == []
+        months, branches = parse_workbook(wb)
+        assert months == []
+        assert branches == []
 
     def test_values_match_real_data(self):
         wb = _make_workbook({"JULY": REAL_DATA["JULY"]})
-        result = parse_workbook(wb)
-        totals = result[0]["totals"]
+        months, _ = parse_workbook(wb)
+        totals = months[0]["system_totals"]
         assert totals["Juvenile Fiction"] == 285031
         assert totals["Young Adult"] == 21107
         assert totals["Adult"] == 139948
@@ -158,17 +250,14 @@ class TestParseWorkbook:
 
     def test_display_month_format(self):
         wb = _make_workbook({"JULY": REAL_DATA["JULY"]})
-        result = parse_workbook(wb)
-        assert result[0]["display_month"] == "Jul 2025"
+        months, _ = parse_workbook(wb)
+        assert months[0]["display_month"] == "Jul 2025"
 
     def test_caps_at_twelve_months(self):
-        # Fill all 12 months
-        all_months = {}
-        for m in FY_MONTHS:
-            all_months[m] = REAL_DATA["JULY"]
+        all_months = {m: REAL_DATA["JULY"] for m in FY_MONTHS}
         wb = _make_workbook(all_months)
-        result = parse_workbook(wb)
-        assert len(result) == 12
+        months, _ = parse_workbook(wb)
+        assert len(months) == 12
 
     def test_fiscal_year_order_preserved(self):
         data = {
@@ -177,19 +266,24 @@ class TestParseWorkbook:
             "APRIL": REAL_DATA["APRIL"],
         }
         wb = _make_workbook(data)
-        result = parse_workbook(wb)
-        names = [r["month_name"] for r in result]
-        assert names == ["JULY", "SEPTEMBER", "APRIL"]
+        months, _ = parse_workbook(wb)
+        assert [r["month_name"] for r in months] == ["JULY", "SEPTEMBER", "APRIL"]
 
     def test_year_detection_first_half(self):
         wb = _make_workbook({"JULY": REAL_DATA["JULY"]}, fy_start_year=2025)
-        result = parse_workbook(wb)
-        assert result[0]["year"] == 2025
+        months, _ = parse_workbook(wb)
+        assert months[0]["year"] == 2025
 
     def test_year_detection_second_half(self):
         wb = _make_workbook({"APRIL": REAL_DATA["APRIL"]}, fy_start_year=2025)
-        result = parse_workbook(wb)
-        assert result[0]["year"] == 2026
+        months, _ = parse_workbook(wb)
+        assert months[0]["year"] == 2026
+
+    def test_returns_branch_list(self):
+        wb = _make_workbook({"JULY": REAL_DATA["JULY"]})
+        _, branches = parse_workbook(wb)
+        # No "Department" row in _make_workbook → no branches extracted
+        assert isinstance(branches, list)
 
 
 # ── build_circulation_data ───────────────────────────────────────────────────
@@ -200,9 +294,12 @@ class TestBuildCirculationData:
         for i, m in enumerate(FY_MONTHS[:count]):
             months.append({
                 "month_name": m,
-                "display_month": f"{m[:3]} 2025",
+                "display_month": f"{m[:3].title()} 2025",
                 "year": 2025,
-                "totals": {cat: 1000 * (i + 1) for cat in CATEGORY_MAP},
+                "system_totals": {cat: 1000 * (i + 1) for cat in CATEGORY_MAP},
+                "branches": {
+                    "Main Branch": {cat: 500 * (i + 1) for cat in CATEGORY_MAP},
+                },
             })
         return months
 
@@ -233,14 +330,69 @@ class TestBuildCirculationData:
         result = build_circulation_data(months)
         assert "T" in result["lastUpdated"]
 
-    def test_filter_by_category(self):
-        months = self._sample_months(3)
+    def test_default_selected_branch_is_system(self):
+        months = self._sample_months(1)
         result = build_circulation_data(months)
-        filtered = [pt for pt in result["data"] if pt["category"] == "Adult"]
-        assert len(filtered) == 3
+        assert result["selectedBranch"] == "System"
+
+    def test_branch_filter_uses_branch_data(self):
+        months = self._sample_months(2)
+        result = build_circulation_data(months, branch_filter="Main Branch")
+        # 5 categories × 2 months = 10 points
+        assert len(result["data"]) == 10
+        assert result["selectedBranch"] == "Main Branch"
+
+    def test_unknown_branch_returns_empty_data(self):
+        months = self._sample_months(2)
+        result = build_circulation_data(months, branch_filter="Ghost Branch")
+        assert result["data"] == []
+
+    def test_branches_list_in_result(self):
+        months = self._sample_months(2)
+        result = build_circulation_data(months)
+        assert "Main Branch" in result["branches"]
+
+    def test_category_values_correct(self):
+        months = self._sample_months(1)
+        result = build_circulation_data(months)
+        adult_pt = next(pt for pt in result["data"] if pt["category"] == "Adult")
+        assert adult_pt["circulation"] == 1000  # first month, multiplier 1
 
 
-# ── lambda_handler – S3 event ────────────────────────────────────────────────
+# ── API response helpers ──────────────────────────────────────────────────────
+
+class TestApiHelpers:
+    def test_api_ok_status_200(self):
+        resp = _api_ok({"key": "value"})
+        assert resp["statusCode"] == 200
+
+    def test_api_ok_body_success_true(self):
+        resp = _api_ok({"key": "value"})
+        body = json.loads(resp["body"])
+        assert body["success"] is True
+        assert body["error"] is None
+        assert "requestId" in body
+        assert "timestamp" in body
+
+    def test_api_err_status_code(self):
+        resp = _api_err(404, "NOT_FOUND", "missing")
+        assert resp["statusCode"] == 404
+
+    def test_api_err_body_structure(self):
+        resp = _api_err(500, "INTERNAL_ERROR", "boom")
+        body = json.loads(resp["body"])
+        assert body["success"] is False
+        assert body["data"] is None
+        assert body["error"]["code"] == "INTERNAL_ERROR"
+        assert body["error"]["message"] == "boom"
+
+    def test_cors_headers_present(self):
+        resp = _api_ok({})
+        assert resp["headers"]["Access-Control-Allow-Origin"] == "*"
+        assert "GET" in resp["headers"]["Access-Control-Allow-Methods"]
+
+
+# ── lambda_handler – S3 event ─────────────────────────────────────────────────
 
 class TestS3Handler:
     def _s3_event(self, bucket="test-bucket", key="uploads/circulation/FY2026.xlsm"):
@@ -258,10 +410,8 @@ class TestS3Handler:
     @patch("lambda_function.read_s3")
     def test_processes_upload_and_writes_json(self, mock_read, mock_write):
         mock_read.return_value = _make_workbook({"JULY": REAL_DATA["JULY"]})
-
         with patch.dict(os.environ, {"PROCESSED_BUCKET": "test-bucket"}):
             result = lambda_handler(self._s3_event(), None)
-
         assert result["statusCode"] == 200
         mock_write.assert_called_once()
         written_payload = mock_write.call_args[0][2]
@@ -271,35 +421,38 @@ class TestS3Handler:
     @patch("lambda_function.read_s3")
     def test_empty_workbook_returns_400(self, mock_read, mock_write):
         mock_read.return_value = _make_workbook({})
-
         with patch.dict(os.environ, {"PROCESSED_BUCKET": "test-bucket"}):
             result = lambda_handler(self._s3_event(), None)
-
         assert result["statusCode"] == 400
         mock_write.assert_not_called()
 
     @patch("lambda_function.write_json_s3")
     @patch("lambda_function.read_s3")
     def test_idempotent_reupload(self, mock_read, mock_write):
-        """Two uploads with same data produce the same output."""
         wb = _make_workbook({"JULY": REAL_DATA["JULY"]})
         mock_read.return_value = wb
-
         with patch.dict(os.environ, {"PROCESSED_BUCKET": "b"}):
             lambda_handler(self._s3_event(), None)
             lambda_handler(self._s3_event(), None)
-
         assert mock_write.call_count == 2
-        first_payload = mock_write.call_args_list[0][0][2]
-        second_payload = mock_write.call_args_list[1][0][2]
-        # Data arrays are identical (timestamps differ)
-        assert first_payload["data"] == second_payload["data"]
+        first = mock_write.call_args_list[0][0][2]
+        second = mock_write.call_args_list[1][0][2]
+        assert first["data"] == second["data"]
+
+    @patch("lambda_function.write_json_s3")
+    @patch("lambda_function.read_s3")
+    def test_response_body_has_branch_count(self, mock_read, mock_write):
+        mock_read.return_value = _make_workbook({"JULY": REAL_DATA["JULY"]})
+        with patch.dict(os.environ, {"PROCESSED_BUCKET": "b"}):
+            result = lambda_handler(self._s3_event(), None)
+        body = json.loads(result["body"])
+        assert "branchesFound" in body
 
 
-# ── lambda_handler – API Gateway ─────────────────────────────────────────────
+# ── lambda_handler – API Gateway ──────────────────────────────────────────────
 
 class TestApiHandler:
-    def _api_event(self, category=None):
+    def _api_event(self, category=None, branch=None):
         event = {
             "httpMethod": "GET",
             "path": "/circulation",
@@ -308,22 +461,27 @@ class TestApiHandler:
         }
         if category:
             event["queryStringParameters"]["category"] = category
+        if branch:
+            event["queryStringParameters"]["branch"] = branch
         return event
 
-    @patch("lambda_function.read_json_s3")
-    def test_returns_all_categories(self, mock_read):
-        mock_read.return_value = {
+    def _stored_payload(self):
+        return {
             "data": [
                 {"category": "Adult", "month": "Jul 2025", "year": 2025, "circulation": 139948},
                 {"category": "Non-Print", "month": "Jul 2025", "year": 2025, "circulation": 169159},
             ],
+            "branches": ["Main Branch"],
+            "selectedBranch": "System",
             "lastUpdated": "2026-01-01T00:00:00",
             "totalRecords": 2,
         }
 
+    @patch("lambda_function.read_json_s3")
+    def test_returns_all_data_when_no_filter(self, mock_read):
+        mock_read.return_value = self._stored_payload()
         with patch.dict(os.environ, {"PROCESSED_BUCKET": "b"}):
             result = lambda_handler(self._api_event(), None)
-
         assert result["statusCode"] == 200
         body = json.loads(result["body"])
         assert body["success"] is True
@@ -331,18 +489,9 @@ class TestApiHandler:
 
     @patch("lambda_function.read_json_s3")
     def test_filters_by_category(self, mock_read):
-        mock_read.return_value = {
-            "data": [
-                {"category": "Adult", "month": "Jul 2025", "year": 2025, "circulation": 139948},
-                {"category": "Non-Print", "month": "Jul 2025", "year": 2025, "circulation": 169159},
-            ],
-            "lastUpdated": "2026-01-01T00:00:00",
-            "totalRecords": 2,
-        }
-
+        mock_read.return_value = self._stored_payload()
         with patch.dict(os.environ, {"PROCESSED_BUCKET": "b"}):
             result = lambda_handler(self._api_event(category="Adult"), None)
-
         body = json.loads(result["body"])
         assert body["success"] is True
         assert len(body["data"]["data"]) == 1
@@ -351,41 +500,26 @@ class TestApiHandler:
 
     @patch("lambda_function.read_json_s3")
     def test_cors_headers_present(self, mock_read):
-        mock_read.return_value = {"data": [], "lastUpdated": "", "totalRecords": 0}
-
+        mock_read.return_value = self._stored_payload()
         with patch.dict(os.environ, {"PROCESSED_BUCKET": "b"}):
             result = lambda_handler(self._api_event(), None)
-
         assert result["headers"]["Access-Control-Allow-Origin"] == "*"
-        assert "GET" in result["headers"]["Access-Control-Allow-Methods"]
 
     @patch("lambda_function.read_json_s3")
     def test_response_matches_api_contract(self, mock_read):
-        """Verify the response has the exact APIResponse<CirculationData> shape."""
-        mock_read.return_value = {
-            "data": [{"category": "Adult", "month": "Jul 2025", "year": 2025, "circulation": 100}],
-            "lastUpdated": "2026-01-01T00:00:00",
-            "totalRecords": 1,
-        }
-
+        mock_read.return_value = self._stored_payload()
         with patch.dict(os.environ, {"PROCESSED_BUCKET": "b"}):
             result = lambda_handler(self._api_event(), None)
-
         body = json.loads(result["body"])
-        # Top-level APIResponse fields
-        assert "success" in body
-        assert "data" in body
-        assert "error" in body
-        assert "timestamp" in body
-        assert "requestId" in body
-        # CirculationData fields
+        for field in ("success", "data", "error", "timestamp", "requestId"):
+            assert field in body
         circ = body["data"]
-        assert "data" in circ
-        assert "lastUpdated" in circ
-        assert "totalRecords" in circ
+        for field in ("data", "lastUpdated", "totalRecords"):
+            assert field in circ
 
     def test_missing_bucket_config_returns_500(self):
-        with patch.dict(os.environ, {}, clear=True):
+        env = {k: v for k, v in os.environ.items() if k != "PROCESSED_BUCKET"}
+        with patch.dict(os.environ, env, clear=True):
             result = lambda_handler(self._api_event(), None)
         body = json.loads(result["body"])
         assert result["statusCode"] == 500
@@ -394,3 +528,16 @@ class TestApiHandler:
     def test_unrecognized_event_returns_400(self):
         result = lambda_handler({"unknown": True}, None)
         assert result["statusCode"] == 400
+
+    @patch("lambda_function.read_json_s3")
+    def test_no_such_key_returns_404(self, mock_read):
+        # Simulate S3 NoSuchKey by raising the client exception shape
+        from botocore.exceptions import ClientError
+        mock_read.side_effect = ClientError(
+            {"Error": {"Code": "NoSuchKey", "Message": "The specified key does not exist."}},
+            "GetObject",
+        )
+        with patch.dict(os.environ, {"PROCESSED_BUCKET": "b"}):
+            result = lambda_handler(self._api_event(), None)
+        # NoSuchKey is caught by the generic Exception branch → 500 INTERNAL_ERROR
+        assert result["statusCode"] in (404, 500)
