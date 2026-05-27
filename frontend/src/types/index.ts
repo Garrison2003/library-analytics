@@ -14,6 +14,7 @@ export interface CirculationDataPoint {
   year: number;
   circulation: number;
   trend?: "up" | "down" | "stable";
+  breakdown?: Record<string, number>; // Sub-category breakdown, e.g. { "Fiction": 4000, "Non-Fiction": 670 }
 }
 
 /**
