@@ -41,8 +41,49 @@ describe("TabNavigation Component", () => {
     const { container } = render(
       <TabNavigation activeTab="monthly" onTabChange={vi.fn()} />,
     );
-    // The active indicator span is only rendered for the active tab
     const indicators = container.querySelectorAll("span.bg-blue-600");
     expect(indicators).toHaveLength(1);
+  });
+
+  it("calls onTabChange even when clicking the already-active tab", async () => {
+    const user = userEvent.setup();
+    const onTabChange = vi.fn();
+    render(<TabNavigation activeTab="dashboard" onTabChange={onTabChange} />);
+    await user.click(screen.getByText("Dashboard"));
+    expect(onTabChange).toHaveBeenCalledWith("dashboard" satisfies TabId);
+  });
+
+  it("shows active indicator under Dashboard when dashboard is active", () => {
+    const { container } = render(
+      <TabNavigation activeTab="dashboard" onTabChange={vi.fn()} />,
+    );
+    const indicator = container.querySelector("span.bg-blue-600");
+    expect(indicator).toBeInTheDocument();
+    // The indicator is inside the Dashboard button
+    const dashboardBtn = screen.getByText("Dashboard").closest("button")!;
+    expect(dashboardBtn.contains(indicator)).toBe(true);
+  });
+
+  it("shows active indicator under Upload when upload is active", () => {
+    const { container } = render(
+      <TabNavigation activeTab="upload" onTabChange={vi.fn()} />,
+    );
+    const indicator = container.querySelector("span.bg-blue-600");
+    const uploadBtn = screen.getByText("Upload").closest("button")!;
+    expect(uploadBtn.contains(indicator)).toBe(true);
+  });
+
+  it("renders exactly four buttons", () => {
+    render(<TabNavigation activeTab="dashboard" onTabChange={vi.fn()} />);
+    expect(screen.getAllByRole("button")).toHaveLength(4);
+  });
+
+  it("only one indicator is visible at a time", () => {
+    const { container, rerender } = render(
+      <TabNavigation activeTab="dashboard" onTabChange={vi.fn()} />,
+    );
+    expect(container.querySelectorAll("span.bg-blue-600")).toHaveLength(1);
+    rerender(<TabNavigation activeTab="upload" onTabChange={vi.fn()} />);
+    expect(container.querySelectorAll("span.bg-blue-600")).toHaveLength(1);
   });
 });

@@ -3,6 +3,7 @@ TF/backend.tf
 *.tfstate
 *.tfstate.backup
 .terraform.lock.hcl
+TF/*.zip
 nul
 **/nul
 

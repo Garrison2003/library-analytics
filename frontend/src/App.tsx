@@ -4,7 +4,7 @@ import { Auth0Provider, useAuth0 } from "@auth0/auth0-react";
 import Homepage from "./pages/Homepage";
 import MonthlyAnalytics from "./pages/MonthlyAnalytics";
 import DailyAnalytics from "./pages/DailyAnalytics";
-import Upload from "./pages/Upload";
+import Upload from "./components/Upload";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import TabNavigation from "./components/TabNavigation";

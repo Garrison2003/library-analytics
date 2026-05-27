@@ -422,4 +422,77 @@ describe("CirculationTrends Component", () => {
       expect(text).toContain("Total");
     });
   });
+
+  // ── formatYLabel – M suffix ─────────────────────────────────────────────
+
+  it("y-axis labels use M suffix for values >= 1 million", async () => {
+    const millionData = CATEGORIES.flatMap((category) =>
+      MONTHS.map((month, i) => ({
+        category,
+        month,
+        year: i < 6 ? 2025 : 2026,
+        circulation: 1_200_000 + i * 100_000,
+      })),
+    );
+    mockFetchOk(millionData);
+    const { container } = render(<CirculationTrends />);
+    await waitFor(() => {
+      const yLabels = container.querySelectorAll('[data-testid="y-axis-label"]');
+      const texts = Array.from(yLabels).map((el) => el.textContent);
+      expect(texts.some((t) => t?.includes("M"))).toBe(true);
+    });
+  });
+
+  // ── Tooltip without breakdown ───────────────────────────────────────────
+
+  it("tooltip shows only Total row when no breakdown field present", async () => {
+    mockFetchOk(makeApiData({ withBreakdown: false }));
+    const { container } = render(<CirculationTrends />);
+    await waitFor(() =>
+      expect(
+        container.querySelectorAll("circle[stroke='white']"),
+      ).toHaveLength(60),
+    );
+
+    const firstGroup = container.querySelectorAll(
+      "circle[stroke='white']",
+    )[0].parentElement!;
+    fireEvent.mouseEnter(firstGroup);
+
+    await waitFor(() => {
+      const tooltip = container.querySelector(
+        '[data-testid="circulation-tooltip"]',
+      );
+      expect(tooltip).toBeInTheDocument();
+      // Total should still show
+      expect(tooltip!.textContent).toContain("1,000");
+      // No sub-category rows (no breakdown field)
+      expect(tooltip!.textContent).not.toContain("Fiction");
+    });
+  });
+
+  // ── Re-fetch on branch change ───────────────────────────────────────────
+
+  it("refetches twice when selectedBranch changes twice", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: {
+          data: makeApiData(),
+          branches: ["Main", "Imaginon"],
+          selectedBranch: "Main",
+          lastUpdated: "",
+          totalRecords: 60,
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { rerender } = render(<CirculationTrends selectedBranch="System" />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    rerender(<CirculationTrends selectedBranch="Main" />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    rerender(<CirculationTrends selectedBranch="Imaginon" />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+  });
 });

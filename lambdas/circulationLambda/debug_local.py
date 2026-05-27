@@ -40,7 +40,11 @@ print(f"Imaginon Jul Adult: {imaginon_adult}")
 BUCKET        = os.environ.get("CIRCULATION_BUCKET", "")
 PROCESSED_KEY = "processed/circulation_data.json"
 
-stored = build_circulation_data(months, "System")
+stored = {
+    "months": months,
+    "branches": branches,
+    "lastUpdated": datetime.now(timezone.utc).isoformat(),
+}
 
 if not BUCKET:
     print("\n[SKIP] Set CIRCULATION_BUCKET env var to push to S3.")

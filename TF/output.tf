@@ -29,3 +29,20 @@ output "circulation_lambda_name" {
   description = "Circulation Lambda function name"
   value       = aws_lambda_function.circulation_lambda.function_name
 }
+
+# ── Upload Handler Outputs ────────────────────────────────────────────────────
+
+output "upload_lambda_arn" {
+  value       = aws_lambda_function.upload_handler.arn
+  description = "ARN of the upload handler Lambda function"
+}
+
+output "upload_endpoint_url" {
+  value       = "${aws_api_gateway_deployment.upload_endpoints.invoke_url}/upload"
+  description = "URL of the upload endpoint"
+}
+
+output "upload_validate_endpoint_url" {
+  value       = "${aws_api_gateway_deployment.upload_endpoints.invoke_url}/upload/validate"
+  description = "URL of the upload validation endpoint"
+}

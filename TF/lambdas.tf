@@ -45,5 +45,42 @@ resource "aws_lambda_function" "circulation_lambda" {
 
 resource "aws_cloudwatch_log_group" "circulation_lambda" {
   name              = "/aws/lambda/${aws_lambda_function.circulation_lambda.function_name}"
-  retention_in_days = 30
+  retention_in_days = 7
+
+  tags = {
+    Name = "${var.project_name}-upload-lambda-logs"
+  }
+}
+
+# ── Upload Handler Lambda ────────────────────────────────────────────────────
+
+resource "aws_lambda_function" "upload_handler" {
+  filename      = "upload_handler_lambda.zip"
+  function_name = "${var.project_name}-upload-handler-${var.environment}"
+  role          = aws_iam_role.upload_lambda_role.arn
+  handler       = "upload_handler_lambda.lambda_handler"
+  runtime       = "python3.12"
+  timeout       = 30
+
+  environment {
+    variables = {
+      UPLOAD_BUCKET = aws_s3_bucket.circulation.id
+    }
+  }
+
+  tags = {
+    Name        = "${var.project_name}-upload-handler"
+    Environment = var.environment
+  }
+}
+
+# ── CloudWatch Log Group for Upload Lambda ──────────────────────────────
+
+resource "aws_cloudwatch_log_group" "upload_lambda_logs" {
+  name              = "/aws/lambda/${aws_lambda_function.upload_handler.function_name}"
+  retention_in_days = 7
+
+  tags = {
+    Name = "${var.project_name}-upload-lambda-logs"
+  }
 }
