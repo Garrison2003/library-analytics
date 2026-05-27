@@ -448,6 +448,16 @@ class TestS3Handler:
         body = json.loads(result["body"])
         assert "branchesFound" in body
 
+    @patch("lambda_function.write_json_s3")
+    @patch("lambda_function.read_s3")
+    def test_url_encoded_key_is_decoded(self, mock_read, mock_write):
+        mock_read.return_value = _make_workbook({"JULY": REAL_DATA["JULY"]})
+        encoded_event = self._s3_event(key="uploads/circulation/FY2026+Circulation+Statistics.xlsm")
+        with patch.dict(os.environ, {"PROCESSED_BUCKET": "b"}):
+            lambda_handler(encoded_event, None)
+        actual_key = mock_read.call_args[0][1]
+        assert actual_key == "uploads/circulation/FY2026 Circulation Statistics.xlsm"
+
 
 # ── lambda_handler – API Gateway ──────────────────────────────────────────────
 
