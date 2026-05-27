@@ -1,16 +1,19 @@
-// src/components/CirculationTrends.tsx
-import React, { useMemo } from "react";
+// src/components/CirculationTrends.tsx (UPDATED)
+
+import React, { useEffect, useMemo, useState } from "react";
 import type { CirculationDataPoint } from "../types/index";
 
 /**
- * CirculationTrends Component
+ * CirculationTrends Component (with Branch Support)
  *
- * Displays five line graphs:
+ * Displays five line graphs, filtered by selected branch:
  * - Juvenile Fiction (blue)
  * - Young Adult (green)
  * - Adult (purple)
  * - Non-Print (teal)
  * - Total Circulation (coral)
+ *
+ * Fetches from GET /circulation?branch={name}
  */
 
 interface LineGraphProps {
@@ -19,7 +22,22 @@ interface LineGraphProps {
   lineColor: string;
 }
 
+interface CirculationTrendsProps {
+  selectedBranch?: string;
+}
+
 const LineGraph: React.FC<LineGraphProps> = ({ title, data, lineColor }) => {
+  if (data.length === 0) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 p-5">
+        <h3 className="text-base font-bold text-gray-900 mb-4">{title}</h3>
+        <div className="h-48 flex items-center justify-center text-gray-500">
+          No data available
+        </div>
+      </div>
+    );
+  }
+
   const months = data.map((d) => d.month);
   const values = data.map((d) => d.circulation);
 
@@ -32,13 +50,25 @@ const LineGraph: React.FC<LineGraphProps> = ({ title, data, lineColor }) => {
   const chartHeight = 220;
   const chartWidth = 535;
   const leftPad = 25;
+  const bottomPad = 40;
+
+  // Calculate plot points
+  const points = values.map((val, i) => {
+    const x = leftPad + (i / (values.length - 1)) * (chartWidth - leftPad - 20);
+    const y = chartHeight - ((val - yMin) / yRange) * (chartHeight - bottomPad);
+    return { x, y, value: val };
+  });
+
+  const pathData = points
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+    .join(" ");
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-5">
       <h3 className="text-base font-bold text-gray-900 mb-4">{title}</h3>
       <div className="relative bg-gray-50 rounded p-3">
         <svg
-          viewBox={`0 0 ${chartWidth + 50} ${chartHeight + 50}`}
+          viewBox={`0 0 ${chartWidth + 50} ${chartHeight + 60}`}
           className="w-full h-auto"
           preserveAspectRatio="xMidYMid meet"
         >
@@ -51,169 +81,185 @@ const LineGraph: React.FC<LineGraphProps> = ({ title, data, lineColor }) => {
             stroke="#374151"
             strokeWidth="2"
           />
+
           {/* X-Axis */}
           <line
             x1={leftPad}
             y1={chartHeight}
-            x2={chartWidth + leftPad}
+            x2={chartWidth + 30}
             y2={chartHeight}
             stroke="#374151"
             strokeWidth="2"
           />
 
           {/* Grid lines */}
-          {[0, 1, 2, 3, 4].map((i) => (
+          {[0.25, 0.5, 0.75].map((ratio) => (
             <line
-              key={`grid-${i}`}
+              key={`grid-${ratio}`}
               x1={leftPad}
-              y1={(i / 4) * chartHeight}
-              x2={chartWidth + leftPad}
-              y2={(i / 4) * chartHeight}
+              y1={chartHeight - ratio * (chartHeight - bottomPad)}
+              x2={chartWidth + 30}
+              y2={chartHeight - ratio * (chartHeight - bottomPad)}
               stroke="#E5E7EB"
               strokeWidth="1"
             />
           ))}
 
-          {/* Y-Axis Labels */}
-          {[0, 4].map((i) => (
-            <text
-              key={`y-${i}`}
-              x={leftPad - 5}
-              y={(i / 4) * chartHeight + 4}
-              textAnchor="end"
-              fontSize="9"
-              fill="#9CA3AF"
-            >
-              {Math.round(yMax - (i / 4) * yRange)}
-            </text>
+          {/* Line path */}
+          <path
+            d={pathData}
+            stroke={lineColor}
+            strokeWidth="2.5"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {/* Data points (circles) */}
+          {points.map((p, i) => (
+            <circle
+              key={`point-${i}`}
+              cx={p.x}
+              cy={p.y}
+              r="4"
+              fill={lineColor}
+              stroke="white"
+              strokeWidth="2"
+            />
           ))}
 
-          {/* X-Axis Labels */}
-          {months.map((month, i) => {
-            if (i % 3 === 0) {
-              const xPos = leftPad + (i / (months.length - 1)) * chartWidth;
-              return (
-                <text
-                  key={`x-${i}`}
-                  x={xPos}
-                  y={chartHeight + 18}
-                  textAnchor="middle"
-                  fontSize="8"
-                  fill="#9CA3AF"
-                >
-                  {month}
-                </text>
-              );
-            }
-            return null;
-          })}
-
-          {/* Lines and Points */}
-          {values.map((value, i) => {
-            const xPos = leftPad + (i / (values.length - 1)) * chartWidth;
-            const yPos = chartHeight - ((value - yMin) / yRange) * chartHeight;
-            return (
-              <g key={`p-${i}`}>
-                {i < values.length - 1 && (
-                  <line
-                    x1={xPos}
-                    y1={yPos}
-                    x2={leftPad + ((i + 1) / (values.length - 1)) * chartWidth}
-                    y2={
-                      chartHeight -
-                      ((values[i + 1] - yMin) / yRange) * chartHeight
-                    }
-                    stroke={lineColor}
-                    strokeWidth="2"
-                  />
-                )}
-                <circle cx={xPos} cy={yPos} r="4" fill={lineColor} />
-              </g>
-            );
-          })}
+          {/* Month labels */}
+          {months.map((month, i) => (
+            <text
+              key={`label-${i}`}
+              x={
+                leftPad +
+                (i / (months.length - 1)) * (chartWidth - leftPad - 20)
+              }
+              y={chartHeight + 25}
+              textAnchor="middle"
+              fontSize="11"
+              fill="#6B7280"
+            >
+              {month}
+            </text>
+          ))}
         </svg>
-      </div>
-      <div className="flex justify-between mt-3">
-        <span className="text-xs text-gray-500">Month</span>
-        <span className="text-xs text-gray-500">Circulation</span>
       </div>
     </div>
   );
 };
 
-const CirculationTrends: React.FC = () => {
-  const months = [
-    "May 2025",
-    "Jun 2025",
-    "Jul 2025",
-    "Aug 2025",
-    "Sep 2025",
-    "Oct 2025",
-    "Nov 2025",
-    "Dec 2025",
-    "Jan 2026",
-    "Feb 2026",
-    "Mar 2026",
-    "Apr 2026",
-  ];
+const CirculationTrends: React.FC<CirculationTrendsProps> = ({
+  selectedBranch = "System",
+}) => {
+  const [allData, setAllData] = useState<CirculationDataPoint[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const makeData = (
-    category: string,
-    values: number[],
-  ): CirculationDataPoint[] =>
-    months.map((month, i) => ({
-      category,
-      month,
-      year: month.includes("2025") ? 2025 : 2026,
-      circulation: values[i],
-    }));
+  // Fetch data when branch changes
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL;
+        if (!apiUrl) {
+          throw new Error("API URL not configured");
+        }
 
+        const params = new URLSearchParams();
+        if (selectedBranch && selectedBranch !== "System") {
+          params.append("branch", selectedBranch);
+        }
+
+        const response = await fetch(
+          `${apiUrl}/circulation?${params.toString()}`,
+        );
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.statusCode}`);
+        }
+
+        const json = await response.json();
+        if (json.success && json.data?.data) {
+          setAllData(json.data.data);
+        } else {
+          setError("Invalid response format");
+        }
+      } catch (err) {
+        console.error("Error fetching circulation data:", err);
+        setError(err instanceof Error ? err.message : "Failed to load data");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [selectedBranch]);
+
+  // Filter data by category
   const juvenileData = useMemo(
-    () =>
-      makeData(
-        "Juvenile Fiction",
-        [600, 750, 820, 795, 880, 920, 950, 1050, 1100, 1150, 1200, 1300],
-      ),
-    [],
+    () => allData.filter((d) => d.category === "Juvenile Fiction"),
+    [allData],
   );
   const youngAdultData = useMemo(
-    () =>
-      makeData(
-        "Young Adult",
-        [450, 580, 650, 720, 800, 850, 920, 1000, 1080, 1150, 1250, 1350],
-      ),
-    [],
+    () => allData.filter((d) => d.category === "Young Adult"),
+    [allData],
   );
   const adultData = useMemo(
-    () =>
-      makeData(
-        "Adult",
-        [
-          1200, 1350, 1400, 1320, 1450, 1500, 1550, 1620, 1700, 1750, 1800,
-          1900,
-        ],
-      ),
-    [],
+    () => allData.filter((d) => d.category === "Adult"),
+    [allData],
   );
   const nonPrintData = useMemo(
-    () =>
-      makeData(
-        "Non-Print",
-        [200, 250, 280, 310, 350, 380, 420, 460, 500, 540, 580, 620],
-      ),
-    [],
+    () => allData.filter((d) => d.category === "Non-Print"),
+    [allData],
   );
   const totalData = useMemo(
-    () =>
-      makeData(
-        "Total Circulation",
-        [
-          2450, 2930, 3150, 3145, 3480, 3650, 3840, 4130, 4380, 4590, 4830,
-          5170,
-        ],
-      ),
-    [],
+    () => allData.filter((d) => d.category === "Total Circulation"),
+    [allData],
   );
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-gray-200 rounded-lg h-64 animate-pulse" />
+          <div className="bg-gray-200 rounded-lg h-64 animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-gray-200 rounded-lg h-64 animate-pulse" />
+          <div className="bg-gray-200 rounded-lg h-64 animate-pulse" />
+        </div>
+        <div className="flex justify-center">
+          <div className="w-full lg:w-2/3 bg-gray-200 rounded-lg h-64 animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+        <p className="font-semibold">Failed to load circulation data</p>
+        <p className="text-sm mt-1">{error}</p>
+      </div>
+    );
+  }
+
+  // Empty state
+  if (allData.length === 0) {
+    return (
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-700">
+        <p className="font-semibold">No data available</p>
+        <p className="text-sm mt-1">
+          Upload a circulation file to populate the graphs.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

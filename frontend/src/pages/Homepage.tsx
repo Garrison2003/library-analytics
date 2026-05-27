@@ -1,23 +1,62 @@
-// src/pages/Homepage.tsx
-import React, { useState } from "react";
+// src/pages/Homepage.tsx (UPDATED - Default First Branch + Better Layout)
+
+import React, { useEffect, useState } from "react";
+import BranchSelector from "../components/BranchSelector";
 import CirculationTrends from "../components/CirculationTrends";
 import ProgrammingCharts from "../components/ProgrammingCharts";
 import QuestionsSection from "../components/QuestionsSection";
 
 /**
- * Homepage Component
+ * Homepage Component (with Branch Support - Defaults to First Branch)
  *
  * Dashboard view displaying:
  * - Hero section
- * - Circulation trends (5 line graphs)
- * - Programming charts (2 bar charts)
+ * - Branch selector (dropdown with scrollable list, defaults to first branch)
+ * - Circulation trends (5 line graphs, filtered by branch)
+ * - Programming charts (2 bar charts - In-Person Attendance & Total Programs)
  * - Questions input for MCP server
- *
- * Navigation to Monthly, Daily, and Upload pages
- * is handled by TabNavigation in the parent App component.
  */
 const Homepage: React.FC = () => {
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const [branches, setBranches] = useState<string[]>([]);
+  const [isLoadingBranches, setIsLoadingBranches] = useState(true);
   const [isLoadingQuestion, setIsLoadingQuestion] = useState<boolean>(false);
+
+  // Fetch available branches on mount
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL;
+        if (!apiUrl) {
+          console.warn("API URL not configured");
+          setIsLoadingBranches(false);
+          return;
+        }
+
+        const response = await fetch(`${apiUrl}/circulation`);
+        if (response.ok) {
+          const json = await response.json();
+          if (json.success && json.data?.branches) {
+            const branchList = json.data.branches;
+            setBranches(branchList);
+            // Default to first branch in the list (not "System")
+            if (branchList.length > 0) {
+              setSelectedBranch(branchList[0]);
+            } else {
+              setSelectedBranch("System");
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching branches:", error);
+        setSelectedBranch("System");
+      } finally {
+        setIsLoadingBranches(false);
+      }
+    };
+
+    fetchBranches();
+  }, []);
 
   const handleQuestionSubmit = async (question: string): Promise<void> => {
     setIsLoadingQuestion(true);
@@ -46,11 +85,26 @@ const Homepage: React.FC = () => {
         </div>
       </section>
 
+      {/* Branch Selector Section */}
+      <section className="py-8 px-8 bg-white border-b border-gray-200">
+        <div className="max-w-6xl mx-auto">
+          <BranchSelector
+            branches={branches}
+            selectedBranch={selectedBranch}
+            onBranchChange={setSelectedBranch}
+            isLoading={isLoadingBranches}
+          />
+        </div>
+      </section>
+
       {/* Circulation Trends Section (5 Line Graphs) */}
       <section className="py-16 px-8 bg-white">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-2xl font-bold text-gray-900 mb-8">At a Glance</h2>
-          <CirculationTrends />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">At a Glance</h2>
+          <p className="text-gray-600 mb-8">
+            Circulation trends for {selectedBranch} over the last 12 months
+          </p>
+          <CirculationTrends selectedBranch={selectedBranch} />
         </div>
       </section>
 
@@ -58,7 +112,9 @@ const Homepage: React.FC = () => {
       <section className="py-16 px-8 bg-gray-50">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-2xl font-bold text-gray-900 mb-8">Programming</h2>
-          <ProgrammingCharts />
+          <div className="space-y-8">
+            <ProgrammingCharts />
+          </div>
         </div>
       </section>
 

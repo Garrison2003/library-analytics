@@ -5,3 +5,6 @@ TF/backend.tf
 .terraform.lock.hcl
 nul
 **/nul
+
+# Claude Code local settings (per-developer, not shared)
+.claude/settings.local.json

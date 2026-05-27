@@ -4,3 +4,9 @@ data "archive_file" "lambda_zip" {
   output_path = "lambda_function_payload.zip"
   excludes    = [".git", "__pycache__", "*.pyc", ".gitignore", "venv", ".venv"]
 }
+
+data "archive_file" "circulation_lambda_zip" {
+  type        = "zip"
+  source_file = "../lambdas/circulationLambda/lambda_function.py"
+  output_path = "circulation_lambda_payload.zip"
+}

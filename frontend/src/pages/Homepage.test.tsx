@@ -1,6 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import Homepage from "./Homepage";
+
+// Mock API-fetching child components so Homepage tests are isolated from network calls
+vi.mock("../components/CirculationTrends", () => ({
+  default: () => (
+    <div data-testid="mock-circulation-trends">
+      <span>Juvenile Fiction</span>
+      <span>Total Circulation</span>
+    </div>
+  ),
+}));
 
 describe("Homepage Component", () => {
   it("renders the hero welcome message", () => {
@@ -35,10 +45,9 @@ describe("Homepage Component", () => {
     expect(screen.getByRole("textbox")).toBeInTheDocument();
   });
 
-  it("renders circulation trend charts inside At a Glance", () => {
+  it("renders the CirculationTrends component inside At a Glance", () => {
     render(<Homepage />);
-    expect(screen.getByText("Juvenile Fiction")).toBeInTheDocument();
-    expect(screen.getByText("Total Circulation")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-circulation-trends")).toBeInTheDocument();
   });
 
   it("renders programming bar charts", () => {
