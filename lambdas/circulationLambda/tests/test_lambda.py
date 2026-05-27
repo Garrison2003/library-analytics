@@ -539,5 +539,4 @@ class TestApiHandler:
         )
         with patch.dict(os.environ, {"PROCESSED_BUCKET": "b"}):
             result = lambda_handler(self._api_event(), None)
-        # NoSuchKey is caught by the generic Exception branch → 500 INTERNAL_ERROR
-        assert result["statusCode"] in (404, 500)
+        assert result["statusCode"] == 404
