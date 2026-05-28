@@ -200,6 +200,21 @@ describe("Upload Component", () => {
     );
   });
 
+  it("derives fileType from extension when no file type card is selected", async () => {
+    const user = userEvent.setup();
+    mockUploadFile.mockResolvedValueOnce({ success: true, data: {} });
+    const { container } = render(<Upload onBackHome={vi.fn()} />);
+    // Do NOT click a file type card — select file directly
+    const file = makeXlsm();
+    selectFile(container, file);
+    await waitFor(() => screen.getByRole("button", { name: /Upload File/i }));
+    await user.click(screen.getByRole("button", { name: /Upload File/i }));
+    expect(mockUploadFile).toHaveBeenCalledWith(
+      file,
+      expect.objectContaining({ fileType: "circulation" }),
+    );
+  });
+
   // ── Upload error ─────────────────────────────────────────────────────────────
 
   it("shows error message when upload returns failure", async () => {
