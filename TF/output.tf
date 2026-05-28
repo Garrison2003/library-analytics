@@ -38,11 +38,11 @@ output "upload_lambda_arn" {
 }
 
 output "upload_endpoint_url" {
-  value       = "${aws_api_gateway_deployment.upload_endpoints.invoke_url}/upload"
+  value       = "${aws_api_gateway_stage.circulation.invoke_url}/upload"
   description = "URL of the upload endpoint"
 }
 
 output "upload_validate_endpoint_url" {
-  value       = "${aws_api_gateway_deployment.upload_endpoints.invoke_url}/upload/validate"
+  value       = "${aws_api_gateway_stage.circulation.invoke_url}/upload/validate"
   description = "URL of the upload validation endpoint"
 }
