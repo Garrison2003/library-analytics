@@ -22,6 +22,7 @@ interface UploadState {
   uploadSuccess: boolean;
   uploadError: string | null;
   uploadProgress: number;
+  showOverwriteDialog: boolean;
 }
 
 export default function Upload({ onBackHome }: UploadProps) {
@@ -36,6 +37,7 @@ export default function Upload({ onBackHome }: UploadProps) {
     uploadSuccess: false,
     uploadError: null,
     uploadProgress: 0,
+    showOverwriteDialog: false,
   });
 
   const availableFileTypes = getAvailableFileTypes();
@@ -162,29 +164,26 @@ export default function Upload({ onBackHome }: UploadProps) {
     }
   };
 
-  // Handle file upload
-  const handleUpload = async () => {
-    if (!state.selectedFile) {
-      setState((prev) => ({
-        ...prev,
-        uploadError: "Please select a file to upload",
-      }));
-      return;
-    }
+  // Handle file upload (shared by initial attempt and overwrite confirmation)
+  const doUpload = async (overwrite: boolean) => {
+    if (!state.selectedFile) return;
+
+    const fileType =
+      state.selectedFileType?.id ??
+      getFileConfigByExtension(state.selectedFile.name)?.id;
 
     setState((prev) => ({
       ...prev,
       isUploading: true,
       uploadError: null,
+      showOverwriteDialog: false,
       uploadProgress: 0,
     }));
 
     try {
-      const fileType =
-        state.selectedFileType?.id ??
-        getFileConfigByExtension(state.selectedFile.name)?.id;
       const response = await apiClient.uploadFile(state.selectedFile, {
         fileType,
+        overwrite,
       });
 
       if (response.success) {
@@ -197,13 +196,15 @@ export default function Upload({ onBackHome }: UploadProps) {
           selectedFileType: null,
         }));
 
-        // Reset form after 3 seconds
         setTimeout(() => {
-          setState((prev) => ({
-            ...prev,
-            uploadSuccess: false,
-          }));
+          setState((prev) => ({ ...prev, uploadSuccess: false }));
         }, 3000);
+      } else if (!overwrite && response.error?.code === "FILE_EXISTS") {
+        setState((prev) => ({
+          ...prev,
+          isUploading: false,
+          showOverwriteDialog: true,
+        }));
       } else {
         setState((prev) => ({
           ...prev,
@@ -224,6 +225,17 @@ export default function Upload({ onBackHome }: UploadProps) {
     }
   };
 
+  const handleUpload = () => {
+    if (!state.selectedFile) {
+      setState((prev) => ({ ...prev, uploadError: "Please select a file to upload" }));
+      return;
+    }
+    doUpload(false);
+  };
+  const handleOverwriteConfirm = () => doUpload(true);
+  const handleOverwriteCancel = () =>
+    setState((prev) => ({ ...prev, showOverwriteDialog: false }));
+
   // Clear selection
   const handleClear = () => {
     setState((prev) => ({
@@ -234,6 +246,7 @@ export default function Upload({ onBackHome }: UploadProps) {
       validationWarnings: [],
       uploadError: null,
       uploadSuccess: false,
+      showOverwriteDialog: false,
     }));
   };
 
@@ -468,6 +481,50 @@ export default function Upload({ onBackHome }: UploadProps) {
               </div>
             )}
 
+            {/* Overwrite Confirmation Dialog */}
+            {state.showOverwriteDialog && state.selectedFile && (
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-5 w-5 text-yellow-400"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <div className="ml-3 flex-1">
+                    <h3 className="text-sm font-medium text-yellow-800">
+                      File Already Exists
+                    </h3>
+                    <p className="mt-1 text-sm text-yellow-700">
+                      <strong>{state.selectedFile.name}</strong> already exists.
+                      Do you want to replace it?
+                    </p>
+                    <div className="mt-3 flex gap-3">
+                      <button
+                        onClick={handleOverwriteConfirm}
+                        className="px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-lg hover:bg-yellow-700 transition-colors"
+                      >
+                        Replace File
+                      </button>
+                      <button
+                        onClick={handleOverwriteCancel}
+                        className="px-4 py-2 bg-white text-yellow-700 text-sm font-medium rounded-lg border border-yellow-300 hover:bg-yellow-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Upload Error */}
             {state.uploadError && (
               <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -547,7 +604,7 @@ export default function Upload({ onBackHome }: UploadProps) {
 
             {/* Action Buttons */}
             <div className="flex gap-4">
-              {state.selectedFile && !state.isUploading && (
+              {state.selectedFile && !state.isUploading && !state.showOverwriteDialog && (
                 <button
                   onClick={handleUpload}
                   className="flex-1 px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
