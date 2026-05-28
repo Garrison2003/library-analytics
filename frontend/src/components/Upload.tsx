@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  FILE_CONFIGURATIONS,
   getAvailableFileTypes,
   getFileConfigByExtension,
   formatFileSize,

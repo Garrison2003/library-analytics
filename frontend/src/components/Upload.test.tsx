@@ -19,11 +19,6 @@ function makeXlsm(name = "FY2026.xlsm") {
   });
 }
 
-function makePdf(name = "report.pdf") {
-  const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // %PDF
-  return new File([bytes], name, { type: "application/pdf" });
-}
-
 function selectFile(container: HTMLElement, file: File) {
   const input = container.querySelector('input[type="file"]')!;
   Object.defineProperty(input, "files", {
