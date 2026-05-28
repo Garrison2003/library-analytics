@@ -109,12 +109,21 @@ resource "aws_api_gateway_deployment" "circulation" {
       aws_api_gateway_integration.get_circulation.id,
       aws_api_gateway_method.options_circulation.id,
       aws_api_gateway_integration.options_circulation.id,
+      aws_api_gateway_integration.upload_post_lambda.id,
+      aws_api_gateway_integration.upload_validate_post_lambda.id,
     ]))
   }
 
   lifecycle {
     create_before_destroy = true
   }
+
+  depends_on = [
+    aws_api_gateway_integration.get_circulation,
+    aws_api_gateway_integration.options_circulation,
+    aws_api_gateway_integration.upload_post_lambda,
+    aws_api_gateway_integration.upload_validate_post_lambda,
+  ]
 }
 
 resource "aws_api_gateway_stage" "circulation" {
@@ -195,31 +204,3 @@ resource "aws_api_gateway_integration" "upload_validate_post_lambda" {
   uri                     = aws_lambda_function.upload_handler.invoke_arn
 }
 
-# ── API Gateway Deployment ──────────────────────────────────────────────
-# Add these resources to your existing API Gateway deployment section
-
-resource "aws_api_gateway_deployment" "upload_endpoints" {
-  rest_api_id = aws_api_gateway_rest_api.circulation.id
-
-  triggers = {
-    redeployment = sha1(jsonencode([
-      aws_api_gateway_integration.upload_post_lambda.id,
-      aws_api_gateway_integration.upload_validate_post_lambda.id,
-    ]))
-  }
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  depends_on = [
-    aws_api_gateway_integration.upload_post_lambda,
-    aws_api_gateway_integration.upload_validate_post_lambda,
-  ]
-}
-
-resource "aws_api_gateway_stage" "upload" {
-  deployment_id = aws_api_gateway_deployment.upload_endpoints.id
-  rest_api_id   = aws_api_gateway_rest_api.circulation.id
-  stage_name    = var.environment
-}
