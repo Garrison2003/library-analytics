@@ -10,3 +10,9 @@ data "archive_file" "circulation_lambda_zip" {
   source_file = "../lambdas/circulationLambda/lambda_function.py"
   output_path = "circulation_lambda_payload.zip"
 }
+
+data "archive_file" "upload_handler_lambda_zip" {
+  type        = "zip"
+  source_file = "../lambdas/uploadHandlerLambda/upload_handler_lambda.py"
+  output_path = "upload_handler_lambda.zip"
+}

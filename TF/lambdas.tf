@@ -55,12 +55,13 @@ resource "aws_cloudwatch_log_group" "circulation_lambda" {
 # ── Upload Handler Lambda ────────────────────────────────────────────────────
 
 resource "aws_lambda_function" "upload_handler" {
-  filename      = "upload_handler_lambda.zip"
-  function_name = "${var.project_name}-upload-handler-${var.environment}"
-  role          = aws_iam_role.upload_lambda_role.arn
-  handler       = "upload_handler_lambda.lambda_handler"
-  runtime       = "python3.12"
-  timeout       = 30
+  filename         = "upload_handler_lambda.zip"
+  function_name    = "${var.project_name}-upload-handler-${var.environment}"
+  role             = aws_iam_role.upload_lambda_role.arn
+  handler          = "upload_handler_lambda.lambda_handler"
+  runtime          = "python3.12"
+  timeout          = 30
+  source_code_hash = data.archive_file.upload_handler_lambda_zip.output_base64sha256
 
   environment {
     variables = {
