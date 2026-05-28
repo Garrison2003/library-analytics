@@ -5,6 +5,9 @@ resource "aws_api_gateway_rest_api" "circulation" {
   name        = "${var.project_name}-circulation-api-${var.environment}"
   description = "Library Analytics – circulation graph data"
 
+  # Required for API Gateway to base64-encode multipart bodies before passing to Lambda
+  binary_media_types = ["multipart/form-data"]
+
   endpoint_configuration {
     types = ["REGIONAL"]
   }
@@ -111,6 +114,8 @@ resource "aws_api_gateway_deployment" "circulation" {
       aws_api_gateway_integration.options_circulation.id,
       aws_api_gateway_integration.upload_post_lambda.id,
       aws_api_gateway_integration.upload_validate_post_lambda.id,
+      aws_api_gateway_integration.options_upload.id,
+      aws_api_gateway_integration.options_upload_validate.id,
     ]))
   }
 
@@ -123,6 +128,8 @@ resource "aws_api_gateway_deployment" "circulation" {
     aws_api_gateway_integration.options_circulation,
     aws_api_gateway_integration.upload_post_lambda,
     aws_api_gateway_integration.upload_validate_post_lambda,
+    aws_api_gateway_integration.options_upload,
+    aws_api_gateway_integration.options_upload_validate,
   ]
 }
 
@@ -173,6 +180,58 @@ resource "aws_api_gateway_integration" "upload_post_lambda" {
   uri                     = aws_lambda_function.upload_handler.invoke_arn
 }
 
+# ── OPTIONS /upload (CORS preflight) ─────────────────────────────────────
+
+resource "aws_api_gateway_method" "options_upload" {
+  rest_api_id   = aws_api_gateway_rest_api.circulation.id
+  resource_id   = aws_api_gateway_resource.upload.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_upload" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.upload.id
+  http_method = aws_api_gateway_method.options_upload.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+resource "aws_api_gateway_method_response" "options_upload_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.upload.id
+  http_method = aws_api_gateway_method.options_upload.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_upload_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.upload.id
+  http_method = aws_api_gateway_method.options_upload.http_method
+  status_code = aws_api_gateway_method_response.options_upload_200.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
+    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'${var.cors_origin}'"
+  }
+
+  depends_on = [aws_api_gateway_integration.options_upload]
+}
+
 # ── API Gateway POST /upload/validate Resource ──────────────────────────
 
 resource "aws_api_gateway_resource" "upload_validate" {
@@ -202,5 +261,57 @@ resource "aws_api_gateway_integration" "upload_validate_post_lambda" {
   type                    = "AWS_PROXY"
   integration_http_method = "POST"
   uri                     = aws_lambda_function.upload_handler.invoke_arn
+}
+
+# ── OPTIONS /upload/validate (CORS preflight) ─────────────────────────────
+
+resource "aws_api_gateway_method" "options_upload_validate" {
+  rest_api_id   = aws_api_gateway_rest_api.circulation.id
+  resource_id   = aws_api_gateway_resource.upload_validate.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_upload_validate" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.upload_validate.id
+  http_method = aws_api_gateway_method.options_upload_validate.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+resource "aws_api_gateway_method_response" "options_upload_validate_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.upload_validate.id
+  http_method = aws_api_gateway_method.options_upload_validate.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_upload_validate_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.upload_validate.id
+  http_method = aws_api_gateway_method.options_upload_validate.http_method
+  status_code = aws_api_gateway_method_response.options_upload_validate_200.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
+    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'${var.cors_origin}'"
+  }
+
+  depends_on = [aws_api_gateway_integration.options_upload_validate]
 }
 
