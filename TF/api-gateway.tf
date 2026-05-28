@@ -5,8 +5,8 @@ resource "aws_api_gateway_rest_api" "circulation" {
   name        = "${var.project_name}-circulation-api-${var.environment}"
   description = "Library Analytics – circulation graph data"
 
-  # Required for API Gateway to base64-encode multipart bodies before passing to Lambda
-  binary_media_types = ["multipart/form-data"]
+  # multipart/* matches any boundary parameter (e.g. multipart/form-data; boundary=xxx)
+  binary_media_types = ["multipart/form-data", "multipart/*"]
 
   endpoint_configuration {
     types = ["REGIONAL"]
