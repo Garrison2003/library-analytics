@@ -138,16 +138,13 @@ def _parse_multipart(event: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
                 }
     return fields
 
-
 def _field_str(fields: Dict, key: str, default: str = "") -> str:
     """Decode a plain-text form field to a string."""
     raw = fields.get(key, {}).get("content", b"")
     decoded = raw.decode() if isinstance(raw, bytes) else raw
     return decoded or default
 
-
 # ── File Validation ──────────────────────────────────────────────────────
-
 
 def get_file_extension(filename: str) -> str:
     parts = filename.split(".")
