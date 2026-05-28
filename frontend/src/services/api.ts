@@ -120,7 +120,9 @@ class APIService {
         // Don't set Content-Type header - let the browser set it with boundary
       });
 
-      if (!response.ok) {
+      // 409 FILE_EXISTS carries a structured JSON body the caller needs to inspect.
+      // All other non-ok statuses (4xx, 5xx gateway errors) are thrown.
+      if (!response.ok && response.status !== 409) {
         throw new Error(`Upload failed: ${response.status}`);
       }
 
