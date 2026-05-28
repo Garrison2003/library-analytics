@@ -180,8 +180,11 @@ export default function Upload({ onBackHome }: UploadProps) {
     }));
 
     try {
+      const fileType =
+        state.selectedFileType?.id ??
+        getFileConfigByExtension(state.selectedFile.name)?.id;
       const response = await apiClient.uploadFile(state.selectedFile, {
-        fileType: state.selectedFileType?.id,
+        fileType,
       });
 
       if (response.success) {
