@@ -246,6 +246,63 @@ describe("Upload Component", () => {
     );
   });
 
+  // ── File exists / overwrite ──────────────────────────────────────────────────
+
+  it("shows overwrite dialog when server returns FILE_EXISTS", async () => {
+    const user = userEvent.setup();
+    mockUploadFile.mockResolvedValueOnce({
+      success: false,
+      error: { code: "FILE_EXISTS", message: "'FY2026.xlsm' already exists." },
+    });
+    const { container } = render(<Upload onBackHome={vi.fn()} />);
+    fireEvent.click(screen.getByText("Circulation Statistics"));
+    selectFile(container, makeXlsm());
+    await waitFor(() => screen.getByRole("button", { name: /Upload File/i }));
+    await user.click(screen.getByRole("button", { name: /Upload File/i }));
+    await waitFor(() =>
+      expect(screen.getByText("File Already Exists")).toBeInTheDocument(),
+    );
+  });
+
+  it("calls uploadFile with overwrite:true when Replace File is clicked", async () => {
+    const user = userEvent.setup();
+    mockUploadFile
+      .mockResolvedValueOnce({
+        success: false,
+        error: { code: "FILE_EXISTS", message: "'FY2026.xlsm' already exists." },
+      })
+      .mockResolvedValueOnce({ success: true, data: {} });
+    const { container } = render(<Upload onBackHome={vi.fn()} />);
+    fireEvent.click(screen.getByText("Circulation Statistics"));
+    selectFile(container, makeXlsm());
+    await waitFor(() => screen.getByRole("button", { name: /Upload File/i }));
+    await user.click(screen.getByRole("button", { name: /Upload File/i }));
+    await waitFor(() => screen.getByRole("button", { name: /Replace File/i }));
+    await user.click(screen.getByRole("button", { name: /Replace File/i }));
+    expect(mockUploadFile).toHaveBeenLastCalledWith(
+      expect.any(File),
+      expect.objectContaining({ overwrite: true }),
+    );
+  });
+
+  it("dismisses the overwrite dialog when Cancel is clicked", async () => {
+    const user = userEvent.setup();
+    mockUploadFile.mockResolvedValueOnce({
+      success: false,
+      error: { code: "FILE_EXISTS", message: "'FY2026.xlsm' already exists." },
+    });
+    const { container } = render(<Upload onBackHome={vi.fn()} />);
+    fireEvent.click(screen.getByText("Circulation Statistics"));
+    selectFile(container, makeXlsm());
+    await waitFor(() => screen.getByRole("button", { name: /Upload File/i }));
+    await user.click(screen.getByRole("button", { name: /Upload File/i }));
+    await waitFor(() => screen.getByRole("button", { name: /Cancel/i }));
+    await user.click(screen.getByRole("button", { name: /Cancel/i }));
+    await waitFor(() =>
+      expect(screen.queryByText("File Already Exists")).not.toBeInTheDocument(),
+    );
+  });
+
   // ── Drag and drop ────────────────────────────────────────────────────────────
 
   it("highlights drop zone on dragover", async () => {

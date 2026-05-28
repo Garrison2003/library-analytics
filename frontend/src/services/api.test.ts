@@ -197,6 +197,20 @@ describe("APIService", () => {
         "Upload failed: 500",
       );
     });
+
+    it("returns the response JSON for a 409 conflict so the caller can detect FILE_EXISTS", async () => {
+      const payload = {
+        success: false,
+        error: { code: "FILE_EXISTS", message: "File already exists" },
+      };
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: async () => payload,
+      });
+      const result = await api.uploadFile(makeFile());
+      expect(result).toEqual(payload);
+    });
   });
 
   // ── validateFile ───────────────────────────────────────────────────────────
