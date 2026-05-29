@@ -56,7 +56,7 @@ describe("Upload Component", () => {
   it("renders both file type options", () => {
     render(<Upload onBackHome={vi.fn()} />);
     expect(screen.getByText("Circulation Statistics")).toBeInTheDocument();
-    expect(screen.getByText("Program Reports")).toBeInTheDocument();
+    expect(screen.getByText("Program Statistics")).toBeInTheDocument();
   });
 
   it("renders the drag-and-drop zone by default", () => {
@@ -103,12 +103,32 @@ describe("Upload Component", () => {
     );
   });
 
+  it("shows Program Statistics help text when that type is selected", async () => {
+    const user = userEvent.setup();
+    render(<Upload onBackHome={vi.fn()} />);
+    await user.click(screen.getByText("Program Statistics"));
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Upload program statistics/i),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("shows .xlsx in allowed formats for Program Statistics", async () => {
+    const user = userEvent.setup();
+    render(<Upload onBackHome={vi.fn()} />);
+    await user.click(screen.getByText("Program Statistics"));
+    await waitFor(() => screen.getByText(/Formats:/i));
+    // Programs config only allows .xlsx now (not .pdf)
+    expect(screen.getByText(/Formats:/i).parentElement?.textContent).toContain(".xlsx");
+  });
+
   // ── File validation errors ───────────────────────────────────────────────────
 
   it("shows error when dropped file extension doesn't match selected type", async () => {
     const { container } = render(<Upload onBackHome={vi.fn()} />);
-    // Select Program Reports (expects .pdf)
-    fireEvent.click(screen.getByText("Program Reports"));
+    // Select Program Statistics (expects .xlsx); xlsm is not in its allowed extensions
+    fireEvent.click(screen.getByText("Program Statistics"));
     const wrongFile = makeXlsm("wrong.xlsm");
     selectFile(container, wrongFile);
     await waitFor(() =>
@@ -120,6 +140,16 @@ describe("Upload Component", () => {
     const { container } = render(<Upload onBackHome={vi.fn()} />);
     const badFile = new File(["data"], "data.csv", { type: "text/csv" });
     selectFile(container, badFile);
+    await waitFor(() =>
+      expect(screen.getByText("Validation Error")).toBeInTheDocument(),
+    );
+  });
+
+  it("shows error when pdf is selected with Program Statistics type", async () => {
+    const { container } = render(<Upload onBackHome={vi.fn()} />);
+    fireEvent.click(screen.getByText("Program Statistics"));
+    const pdfFile = new File(["data"], "report.pdf", { type: "application/pdf" });
+    selectFile(container, pdfFile);
     await waitFor(() =>
       expect(screen.getByText("Validation Error")).toBeInTheDocument(),
     );

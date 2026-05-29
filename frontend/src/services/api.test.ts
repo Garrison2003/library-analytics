@@ -54,6 +54,35 @@ describe("APIService", () => {
     });
   });
 
+  // ── getProgrammingData ─────────────────────────────────────────────────────
+
+  describe("getProgrammingData", () => {
+    it("calls /programming with the branch query param", async () => {
+      mockFetch({ data: {} });
+      await api.getProgrammingData("IMG");
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/programming?branch=IMG"),
+        expect.any(Object),
+      );
+    });
+
+    it("omits branch param when the branch string is empty", async () => {
+      mockFetch({ data: {} });
+      await api.getProgrammingData("");
+      const url = (global.fetch as ReturnType<typeof vi.fn>).mock
+        .calls[0][0] as string;
+      expect(url).toContain("/programming");
+      expect(url).not.toContain("branch=");
+    });
+
+    it("returns the parsed JSON response", async () => {
+      const payload = { success: true, data: { branch: "IMG", months: [] } };
+      mockFetch(payload);
+      const result = await api.getProgrammingData("IMG");
+      expect(result).toEqual(payload);
+    });
+  });
+
   // ── getMonthlyAnalytics ────────────────────────────────────────────────────
 
   describe("getMonthlyAnalytics", () => {
