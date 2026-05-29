@@ -19,7 +19,8 @@ class APIService {
   private timeout: number = 30000; // 30 seconds
 
   constructor(
-    baseURL: string = import.meta.env.VITE_API_URL || "http://localhost:3000/api",
+    baseURL: string = import.meta.env.VITE_API_URL ||
+      "http://localhost:3000/api",
   ) {
     this.baseURL = baseURL;
   }
@@ -72,6 +73,16 @@ class APIService {
     if (category) params.append("category", category);
 
     return this.request<CirculationData>(`/circulation?${params.toString()}`);
+  }
+
+  /**
+   * Get programming statistics for a specific branch
+   */
+  async getProgrammingData(branch: string): Promise<APIResponse<any>> {
+    const params = new URLSearchParams();
+    if (branch) params.append("branch", branch);
+
+    return this.request<any>(`/programming?${params.toString()}`);
   }
 
   /**
