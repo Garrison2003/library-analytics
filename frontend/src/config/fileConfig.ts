@@ -68,14 +68,18 @@ export const FILE_CONFIGURATIONS: FileTypeConfigMap = {
 
   programs: {
     id: "programs",
-    displayName: "Program Reports",
-    description: "PDF reports containing program and outreach activity data",
-    allowedExtensions: ["pdf"],
-    acceptedMimeTypes: ["application/pdf"],
+    displayName: "Program Statistics",
+    description:
+      "Excel workbook containing monthly program attendance and activity data by branch",
+    allowedExtensions: ["xlsx"],
+    acceptedMimeTypes: [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ],
     maxSizeBytes: 20 * 1024 * 1024, // 20 MB
-    s3Destination: "uploads/programs",
+    s3Destination: "uploads/programming",
     validate: validateProgramFile,
-    helpText: "Upload program report PDFs. File must be a valid PDF document.",
+    helpText:
+      "Upload program statistics in Excel format. File should contain monthly attendance data and be named with the 3-letter department code (e.g., IMG Monthly Stats FY26-28).",
   },
 
   // Future file types can be added here
@@ -126,25 +130,25 @@ async function validateCirculationFile(file: File): Promise<ValidationResult> {
 }
 
 /**
- * Validation function for program report files
- * Checks that the file is a valid PDF
+ * Validation function for program statistics files
+ * Checks that the file is a valid Excel spreadsheet
  */
 async function validateProgramFile(file: File): Promise<ValidationResult> {
   // Check file extension
   const extension = getFileExtension(file.name);
-  if (extension !== "pdf") {
+  if (extension !== "xlsx") {
     return {
       valid: false,
-      error: `Invalid file format. Expected .pdf, got .${extension}`,
+      error: `Invalid file format. Expected .xlsx, got .${extension}`,
     };
   }
 
   // Check MIME type
-  if (file.type !== "application/pdf") {
+  if (!file.type.includes("spreadsheetml")) {
     return {
       valid: false,
       error:
-        "File does not appear to be a valid PDF. Please ensure you're uploading a PDF file.",
+        "File does not appear to be a valid Excel file. Please ensure you're uploading a .xlsx file.",
     };
   }
 
@@ -156,18 +160,22 @@ async function validateProgramFile(file: File): Promise<ValidationResult> {
     };
   }
 
-  // Check for PDF magic bytes (PDF files should start with %PDF)
-  const header = await readFileHeader(file, 4);
-  if (header !== "%PDF") {
+  // Check filename contains 3-letter code (e.g., IMG Montly Stats...)
+  const filename = file.name;
+  const codeMatch = filename.match(/^([A-Z]{3})\s+/);
+  if (!codeMatch) {
     return {
       valid: false,
       error:
-        "File does not appear to be a valid PDF. The file header is incorrect.",
+        "Invalid filename format. File should start with a 3-letter department code (e.g., IMG Monthly Stats FY26-28).",
     };
   }
 
   return {
     valid: true,
+    warnings: [
+      "File will be validated on the server for correct data structure.",
+    ],
   };
 }
 
