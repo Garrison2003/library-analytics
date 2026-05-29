@@ -136,6 +136,20 @@ const BarChart: React.FC<BarChartProps> = ({
   );
 };
 
+// Mirrors BRANCH_CODE_MAP in programming_lambda.py
+const BRANCH_NAME_TO_CODE: Record<string, string> = {
+  Imaginon: "IMG",
+  Main: "MAI",
+  "Plaza Midwood": "PLZ",
+  Northlake: "NOR",
+  Charlotte: "CHS",
+  Spangler: "SPA",
+  Carmel: "CAR",
+  Community: "COM",
+  East: "EAS",
+  West: "WES",
+};
+
 interface ProgrammingChartsProps {
   selectedBranch?: string;
 }
@@ -188,7 +202,7 @@ const ProgrammingCharts: React.FC<ProgrammingChartsProps> = ({
 
         // Extract 3-letter branch code (e.g., "Imaginon" → "IMG")
         // For now, we'll pass the branch as-is; the backend expects the code
-        const branchCode = selectedBranch.substring(0, 3).toUpperCase();
+        const branchCode = BRANCH_NAME_TO_CODE[selectedBranch] ?? selectedBranch;
 
         const response = await fetch(
           `${apiUrl}/programming?branch=${encodeURIComponent(branchCode)}`,
