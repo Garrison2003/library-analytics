@@ -149,3 +149,67 @@ resource "aws_iam_role_policy" "upload_lambda_logs_policy" {
     }]
   })
 }
+
+# ── Programming Statistics Lambda role ───────────────────────────────────────
+
+resource "aws_iam_role" "programming_lambda" {
+  name = "${var.project_name}-programming-lambda-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "programming_lambda" {
+  name = "${var.project_name}-programming-policy"
+  role = aws_iam_role.programming_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Logging"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      },
+      {
+        Sid      = "S3ListBucket"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = aws_s3_bucket.circulation.arn
+      },
+      {
+        Sid      = "S3ReadUploads"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "${aws_s3_bucket.circulation.arn}/uploads/programming/*"
+      },
+      {
+        Sid      = "S3WriteProcessed"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = "${aws_s3_bucket.circulation.arn}/processed/programming/*"
+      },
+      {
+        Sid      = "S3ReadProcessed"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "${aws_s3_bucket.circulation.arn}/processed/programming/*"
+      }
+    ]
+  })
+}

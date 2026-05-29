@@ -16,3 +16,9 @@ data "archive_file" "upload_handler_lambda_zip" {
   source_file = "../lambdas/uploadHandlerLambda/upload_handler_lambda.py"
   output_path = "upload_handler_lambda.zip"
 }
+
+data "archive_file" "programming_lambda_zip" {
+  type        = "zip"
+  source_file = "../lambdas/programmingLambda/programming_lambda.py"
+  output_path = "programming_lambda_payload.zip"
+}

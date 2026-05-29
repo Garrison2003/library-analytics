@@ -113,7 +113,7 @@ const Homepage: React.FC = () => {
         <div className="max-w-6xl mx-auto">
           <h2 className="text-2xl font-bold text-gray-900 mb-8">Programming</h2>
           <div className="space-y-8">
-            <ProgrammingCharts />
+            <ProgrammingCharts selectedBranch={selectedBranch} />
           </div>
         </div>
       </section>

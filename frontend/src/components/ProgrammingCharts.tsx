@@ -1,24 +1,59 @@
 // src/components/ProgrammingCharts.tsx
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 /**
  * ProgrammingCharts Component
  *
- * Displays two bar charts for the fiscal year (July 1 – June 30):
- * 1. FY25-FY26 In-Person Attendance
- * 2. Total Programs FY25-FY26
+ * Displays two bar charts for programming statistics:
+ * 1. In-Person Attendance
+ * 2. Total Programs
  *
- * Bar labels use MM/YY format starting from 07/24 (July 2024).
+ * Fetches data from /programming API based on selectedBranch.
+ * Shows "No current data for {branch}" if no data available.
  */
+
+interface ProgrammingData {
+  branch: string;
+  branchName: string;
+  months: string[];
+  attendance: number[];
+  programs: number[];
+  dataFound: boolean;
+  lastUpdated: string;
+}
 
 interface BarChartProps {
   title: string;
   data: number[];
   months: string[];
   colors: string[];
+  noDataMessage?: string;
 }
 
-const BarChart: React.FC<BarChartProps> = ({ title, data, months, colors }) => {
+const BarChart: React.FC<BarChartProps> = ({
+  title,
+  data,
+  months,
+  colors,
+  noDataMessage,
+}) => {
+  // Show no-data state
+  if (!data || data.length === 0) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-1 text-center">
+          {title}
+        </h3>
+        <p className="text-xs text-gray-500 mb-4 text-center">
+          FY25 – FY26 &nbsp;(Fiscal Year: July 1 – June 30)
+        </p>
+        <div className="h-64 flex items-center justify-center text-gray-400">
+          {noDataMessage || "No data available"}
+        </div>
+      </div>
+    );
+  }
+
   const maxValue = Math.max(...data);
   const chartHeight = 250;
   const chartWidth = 900;
@@ -101,36 +136,16 @@ const BarChart: React.FC<BarChartProps> = ({ title, data, months, colors }) => {
   );
 };
 
-const ProgrammingCharts: React.FC = () => {
-  // MM/YY format — Fiscal year July 1 to June 30
-  const barMonths = [
-    "07/24",
-    "08/24",
-    "09/24",
-    "10/24",
-    "11/24",
-    "12/24",
-    "01/25",
-    "02/25",
-    "03/25",
-    "04/25",
-    "05/25",
-    "06/25",
-    "07/25",
-    "08/25",
-    "09/25",
-    "10/25",
-    "11/25",
-    "12/25",
-  ];
+interface ProgrammingChartsProps {
+  selectedBranch?: string;
+}
 
-  const attendanceData = [
-    340, 300, 261, 212, 235, 335, 617, 452, 566, 224, 537, 784, 758, 418, 457,
-    652, 0, 0,
-  ];
-  const programsData = [
-    52, 27, 50, 25, 23, 29, 51, 46, 61, 33, 26, 34, 44, 30, 35, 49, 0, 0,
-  ];
+const ProgrammingCharts: React.FC<ProgrammingChartsProps> = ({
+  selectedBranch = "",
+}) => {
+  const [data, setData] = useState<ProgrammingData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const barColors = [
     "#5990C8",
@@ -153,19 +168,100 @@ const ProgrammingCharts: React.FC = () => {
     "#599059",
   ];
 
+  useEffect(() => {
+    const fetchProgrammingData = async () => {
+      if (!selectedBranch) {
+        setData(null);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL;
+        if (!apiUrl) {
+          setError("API URL not configured");
+          setLoading(false);
+          return;
+        }
+
+        // Extract 3-letter branch code (e.g., "Imaginon" → "IMG")
+        // For now, we'll pass the branch as-is; the backend expects the code
+        const branchCode = selectedBranch.substring(0, 3).toUpperCase();
+
+        const response = await fetch(
+          `${apiUrl}/programming?branch=${encodeURIComponent(branchCode)}`,
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const json = await response.json();
+        if (json.success && json.data) {
+          setData(json.data);
+        } else {
+          setError(json.error?.message || "Failed to fetch data");
+        }
+      } catch (err) {
+        console.error("Error fetching programming data:", err);
+        setError("Failed to load programming data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProgrammingData();
+  }, [selectedBranch]);
+
+  // Determine no-data message
+  const noDataMessage =
+    data && !data.dataFound
+      ? `No current data for ${data.branchName || selectedBranch}`
+      : "Loading...";
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-6 h-96 flex items-center justify-center">
+          <div className="text-gray-500">Loading programming data...</div>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-6 h-96 flex items-center justify-center">
+          <div className="text-gray-500">Loading programming data...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-white rounded-lg border border-red-200 p-6">
+          <p className="text-red-600">Error: {error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Render charts
   return (
     <div className="space-y-6">
       <BarChart
         title="In-Person Attendance"
-        data={attendanceData}
-        months={barMonths}
+        data={data?.attendance || []}
+        months={data?.months || []}
         colors={barColors}
+        noDataMessage={noDataMessage}
       />
       <BarChart
         title="Total Programs"
-        data={programsData}
-        months={barMonths}
+        data={data?.programs || []}
+        months={data?.months || []}
         colors={barColors}
+        noDataMessage={noDataMessage}
       />
     </div>
   );

@@ -85,3 +85,37 @@ resource "aws_cloudwatch_log_group" "upload_lambda_logs" {
     Name = "${var.project_name}-upload-lambda-logs"
   }
 }
+
+# ── Programming Statistics Lambda ───────────────────────────────────────────
+
+resource "aws_lambda_function" "programming_lambda" {
+  filename         = "programming_lambda_payload.zip"
+  function_name    = "${var.project_name}-programming-${var.environment}"
+  role             = aws_iam_role.programming_lambda.arn
+  handler          = "programming_lambda.lambda_handler"
+  runtime          = "python3.12"
+  memory_size      = var.programming_lambda_memory
+  timeout          = var.programming_lambda_timeout
+  source_code_hash = data.archive_file.programming_lambda_zip.output_base64sha256
+  layers           = [aws_lambda_layer_version.openpyxl.arn]
+
+  environment {
+    variables = {
+      PROCESSED_BUCKET = aws_s3_bucket.circulation.id
+    }
+  }
+
+  tags = {
+    Name        = "${var.project_name}-programming-lambda"
+    Environment = var.environment
+  }
+}
+
+resource "aws_cloudwatch_log_group" "programming_lambda" {
+  name              = "/aws/lambda/${aws_lambda_function.programming_lambda.function_name}"
+  retention_in_days = 7
+
+  tags = {
+    Name = "${var.project_name}-programming-lambda-logs"
+  }
+}

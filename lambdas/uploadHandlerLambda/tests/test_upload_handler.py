@@ -28,6 +28,7 @@ XLSM_MIME = "application/vnd.ms-excel.sheet.macroEnabled.12"
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 PDF_MIME = "application/pdf"
 XLSM_BYTES = b"PK\x03\x04" + b"\x00" * 20  # Fake Excel magic bytes
+XLSX_BYTES = b"PK\x03\x04" + b"\x00" * 20  # xlsx shares the ZIP magic bytes
 
 
 def _build_multipart(*parts):
@@ -148,10 +149,16 @@ class TestValidateFile:
         assert ok is True
         assert msg == ""
 
-    def test_valid_programs_pdf(self):
-        ok, msg, _ = validate_file("report.pdf", 1024, PDF_MIME, "programs")
+    def test_valid_programs_xlsx(self):
+        ok, msg, _ = validate_file("data.xlsx", 1024, XLSX_MIME, "programs")
         assert ok is True
         assert msg == ""
+
+    def test_pdf_rejected_for_programs(self):
+        ok, msg, details = validate_file("report.pdf", 1024, PDF_MIME, "programs")
+        assert ok is False
+        assert ".pdf" in msg
+        assert "xlsx" in details.get("expectedExtensions", [])
 
     def test_unsupported_file_type_returns_false(self):
         ok, msg, details = validate_file("data.xlsm", 1024, XLSM_MIME, "invoices")
@@ -180,7 +187,7 @@ class TestValidateFile:
 
     def test_programs_file_too_large_returns_false(self):
         max_bytes = FILE_TYPE_CONFIG["programs"]["maxSizeBytes"]
-        ok, msg, _ = validate_file("report.pdf", max_bytes + 1, PDF_MIME, "programs")
+        ok, msg, _ = validate_file("data.xlsx", max_bytes + 1, XLSX_MIME, "programs")
         assert ok is False
         assert "too large" in msg.lower()
 
@@ -283,7 +290,7 @@ class TestHandleValidate:
         assert body["data"]["fileType"] == "circulation"
 
     def test_explicit_programs_file_type(self):
-        resp = handle_validate(_validate_event("report.pdf", b"%PDF-1.4", PDF_MIME, "programs"))
+        resp = handle_validate(_validate_event("data.xlsx", XLSX_BYTES, XLSX_MIME, "programs"))
         body = json.loads(resp["body"])
         assert body["data"]["valid"] is True
         assert body["data"]["fileType"] == "programs"
@@ -386,11 +393,16 @@ class TestHandleUpload:
         assert resp["statusCode"] == 500
         assert json.loads(resp["body"])["error"]["code"] == "S3_ERROR"
 
-    def test_pdf_upload_uses_programs_s3_destination(self, bucket, mock_s3):
-        resp = handle_upload(_upload_event("report.pdf", b"%PDF-1.4", PDF_MIME, "programs"))
+    def test_xlsx_upload_uses_programming_s3_destination(self, bucket, mock_s3):
+        resp = handle_upload(_upload_event("data.xlsx", XLSX_BYTES, XLSX_MIME, "programs"))
         assert resp["statusCode"] == 200
         kwargs = mock_s3.put_object.call_args.kwargs
-        assert kwargs["Key"] == "uploads/programs/report.pdf"
+        assert kwargs["Key"] == "uploads/programming/data.xlsx"
+
+    def test_pdf_rejected_for_programs_type(self, bucket):
+        resp = handle_upload(_upload_event("report.pdf", b"%PDF-1.4", PDF_MIME, "programs"))
+        assert resp["statusCode"] == 400
+        assert json.loads(resp["body"])["error"]["code"] == "INVALID_FILE"
 
     def test_response_has_timestamp_and_request_id(self, bucket):
         resp = handle_upload(_upload_event("data.xlsm", XLSM_BYTES, XLSM_MIME))

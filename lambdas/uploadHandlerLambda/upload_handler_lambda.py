@@ -42,11 +42,13 @@ FILE_TYPE_CONFIG = {
     },
     "programs": {
         "id": "programs",
-        "displayName": "Program Reports",
-        "allowedExtensions": ["pdf"],
-        "acceptedMimeTypes": ["application/pdf"],
+        "displayName": "Program Statistics",
+        "allowedExtensions": ["xlsx"],
+        "acceptedMimeTypes": [
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ],
         "maxSizeBytes": 20 * 1024 * 1024,  # 20 MB
-        "s3Destination": "uploads/programs",
+        "s3Destination": "uploads/programming",
     },
 }
 
