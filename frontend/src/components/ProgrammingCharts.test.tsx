@@ -50,7 +50,7 @@ describe("ProgrammingCharts Component", () => {
 
   it("renders fiscal year subtitle on each chart", () => {
     render(<ProgrammingCharts />);
-    const subtitles = screen.getAllByText(/FY25\s*[–-]\s*FY26/);
+    const subtitles = screen.getAllByText(/FY\d{2}\s*[–-]\s*FY\d{2}/);
     expect(subtitles).toHaveLength(2);
   });
 

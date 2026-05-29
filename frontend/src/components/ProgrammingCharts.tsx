@@ -22,6 +22,14 @@ interface ProgrammingData {
   lastUpdated: string;
 }
 
+function fiscalYearSubtitle(): string {
+  const now = new Date();
+  // July (month index 6) starts a new fiscal year
+  const currentFYEnd = now.getMonth() >= 6 ? now.getFullYear() + 1 : now.getFullYear();
+  const prevFYEnd = currentFYEnd - 1;
+  return `FY${String(prevFYEnd).slice(-2)} – FY${String(currentFYEnd).slice(-2)}`;
+}
+
 interface BarChartProps {
   title: string;
   data: number[];
@@ -45,7 +53,7 @@ const BarChart: React.FC<BarChartProps> = ({
           {title}
         </h3>
         <p className="text-xs text-gray-500 mb-4 text-center">
-          FY25 – FY26 &nbsp;(Fiscal Year: July 1 – June 30)
+          {fiscalYearSubtitle()} &nbsp;(Fiscal Year: July 1 – June 30)
         </p>
         <div className="h-64 flex items-center justify-center text-gray-400">
           {noDataMessage || "No data available"}
@@ -66,7 +74,7 @@ const BarChart: React.FC<BarChartProps> = ({
         {title}
       </h3>
       <p className="text-xs text-gray-500 mb-4 text-center">
-        FY25 – FY26 &nbsp;(Fiscal Year: July 1 – June 30)
+        {fiscalYearSubtitle()} &nbsp;(Fiscal Year: July 1 – June 30)
       </p>
 
       <div className="overflow-x-auto">

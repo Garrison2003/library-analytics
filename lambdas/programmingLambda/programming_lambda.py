@@ -76,6 +76,36 @@ FISCAL_MONTHS = [
 
 PROCESSED_DIR = "processed/programming"
 
+# ── Fiscal-year filtering ─────────────────────────────────────────────────────
+
+def _two_fy_cutoff(now: Optional[datetime] = None) -> datetime:
+    """
+    Return the July 1 start date of the fiscal year that began two FYs ago.
+    For example, on any date in FY26 (Jul 2025 – Jun 2026) the cutoff is 2024-07-01,
+    so the returned data spans FY25 and FY26.
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+    fy_start_year = now.year if now.month >= 7 else now.year - 1
+    return datetime(fy_start_year - 1, 7, 1)
+
+
+def _filter_to_last_two_fiscal_years(payload: dict, now: Optional[datetime] = None) -> dict:
+    """Return a copy of payload with data filtered to the last two fiscal years."""
+    cutoff = _two_fy_cutoff(now)
+    filtered = [
+        r for r in payload.get("data", [])
+        if datetime.fromisoformat(r["date"]) >= cutoff
+    ]
+    return {
+        **payload,
+        "data": filtered,
+        "months": [r["month"] for r in filtered],
+        "attendance": [r["attendance"] for r in filtered],
+        "programs": [r["programs"] for r in filtered],
+    }
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _env(name: str, fallback: str = "") -> str:
@@ -388,6 +418,7 @@ def handle_api_request(event: dict) -> dict:
 
         try:
             payload = read_json_s3(bucket, key)
+            payload = _filter_to_last_two_fiscal_years(payload)
             return _api_ok(payload)
         except ClientError as exc:
             code = exc.response["Error"]["Code"]
