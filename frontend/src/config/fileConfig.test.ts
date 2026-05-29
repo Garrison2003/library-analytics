@@ -69,7 +69,7 @@ describe("getAvailableFileTypes", () => {
 describe("isValidFileExtension", () => {
   it("returns true for xlsm", () => expect(isValidFileExtension("data.xlsm")).toBe(true));
   it("returns true for xlsx", () => expect(isValidFileExtension("data.xlsx")).toBe(true));
-  it("returns true for pdf", () => expect(isValidFileExtension("report.pdf")).toBe(true));
+  it("returns false for pdf", () => expect(isValidFileExtension("report.pdf")).toBe(false));
   it("returns false for csv", () => expect(isValidFileExtension("data.csv")).toBe(false));
   it("returns false for txt", () => expect(isValidFileExtension("notes.txt")).toBe(false));
   it("returns false for no extension", () => expect(isValidFileExtension("nodot")).toBe(false));
@@ -84,8 +84,8 @@ describe("getFileConfigByExtension", () => {
   it("resolves xlsx to circulation", () =>
     expect(getFileConfigByExtension("data.xlsx")?.id).toBe("circulation"));
 
-  it("resolves pdf to programs", () =>
-    expect(getFileConfigByExtension("report.pdf")?.id).toBe("programs"));
+  it("returns null for pdf (no longer accepted by any type)", () =>
+    expect(getFileConfigByExtension("report.pdf")).toBeNull());
 
   it("returns null for unsupported extensions", () =>
     expect(getFileConfigByExtension("data.csv")).toBeNull());
@@ -131,16 +131,16 @@ describe("FILE_CONFIGURATIONS", () => {
   describe("programs", () => {
     const cfg = FILE_CONFIGURATIONS.programs;
 
-    it("allows pdf only", () => {
-      expect(cfg.allowedExtensions).toEqual(["pdf"]);
+    it("allows xlsx only", () => {
+      expect(cfg.allowedExtensions).toEqual(["xlsx"]);
     });
 
     it("has a 20 MB size limit", () => {
       expect(cfg.maxSizeBytes).toBe(20 * 1024 * 1024);
     });
 
-    it("routes to uploads/programs in S3", () => {
-      expect(cfg.s3Destination).toBe("uploads/programs");
+    it("routes to uploads/programming in S3", () => {
+      expect(cfg.s3Destination).toBe("uploads/programming");
     });
   });
 });
@@ -204,44 +204,42 @@ describe("validateCirculationFile", () => {
 describe("validateProgramFile", () => {
   const validate = FILE_CONFIGURATIONS.programs.validate!;
 
-  it("rejects a non-PDF extension", async () => {
+  it("rejects a non-xlsx extension", async () => {
     const file = new File(["data"], "report.docx", {
       type: "application/msword",
     });
     const result = await validate(file);
     expect(result.valid).toBe(false);
-    expect(result.error).toMatch(/pdf/i);
+    expect(result.error).toMatch(/xlsx/i);
   });
 
-  it("rejects wrong MIME type for PDF extension", async () => {
-    const file = new File(["data"], "report.pdf", { type: "text/plain" });
+  it("rejects wrong MIME type for xlsx extension", async () => {
+    const file = new File(["data"], "IMG Stats.xlsx", { type: "text/plain" });
     const result = await validate(file);
     expect(result.valid).toBe(false);
   });
 
-  it("accepts a valid PDF with %PDF header", async () => {
-    const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // %PDF
-    const file = new File([pdfBytes], "report.pdf", {
-      type: "application/pdf",
+  it("accepts a valid xlsx with a 3-letter branch code in the filename", async () => {
+    const file = new File(["data"], "IMG Monthly Stats.xlsx", {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
     const result = await validate(file);
     expect(result.valid).toBe(true);
   });
 
-  it("rejects a PDF with wrong magic bytes", async () => {
-    const badBytes = new Uint8Array([0x00, 0x01, 0x02, 0x03]);
-    const file = new File([badBytes], "report.pdf", {
-      type: "application/pdf",
+  it("rejects xlsx missing the 3-letter branch code in the filename", async () => {
+    const file = new File(["data"], "Monthly Stats.xlsx", {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
     const result = await validate(file);
     expect(result.valid).toBe(false);
-    expect(result.error).toMatch(/header/i);
+    expect(result.error).toMatch(/department code/i);
   });
 
   it("rejects a file exceeding 20 MB", async () => {
     const bigContent = new Uint8Array(21 * 1024 * 1024);
-    const file = new File([bigContent], "report.pdf", {
-      type: "application/pdf",
+    const file = new File([bigContent], "IMG Monthly Stats.xlsx", {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
     const result = await validate(file);
     expect(result.valid).toBe(false);
