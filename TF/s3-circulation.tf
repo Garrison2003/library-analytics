@@ -76,3 +76,27 @@ resource "aws_s3_bucket_notification" "circulation_trigger" {
 
   depends_on = [aws_lambda_permission.s3_invoke_circulation]
 }
+
+# ── S3 → Programming Lambda trigger ──────────────────────────────────────────
+
+resource "aws_lambda_permission" "s3_invoke_programming" {
+  statement_id   = "AllowS3InvokeProgramming"
+  action         = "lambda:InvokeFunction"
+  function_name  = aws_lambda_function.programming_lambda.function_name
+  principal      = "s3.amazonaws.com"
+  source_arn     = aws_s3_bucket.circulation.arn
+  source_account = data.aws_caller_identity.current.account_id
+}
+
+resource "aws_s3_bucket_notification" "programming_trigger" {
+  bucket = aws_s3_bucket.circulation.id
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.programming_lambda.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "uploads/programming/"
+    filter_suffix       = ".xlsx"
+  }
+
+  depends_on = [aws_lambda_permission.s3_invoke_programming]
+}
