@@ -237,23 +237,3 @@ export function formatFileSize(bytes: number): string {
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
 }
 
-/**
- * Helper: Read first N bytes of file as string
- */
-async function readFileHeader(file: File, length: number): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (e.target?.result) {
-        const buffer = e.target.result as ArrayBuffer;
-        const view = new Uint8Array(buffer);
-        const header = String.fromCharCode.apply(null, Array.from(view));
-        resolve(header);
-      } else {
-        resolve("");
-      }
-    };
-    reader.onerror = reject;
-    reader.readAsArrayBuffer(file.slice(0, length));
-  });
-}
