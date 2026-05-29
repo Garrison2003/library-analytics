@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   getAvailableFileTypes,
   getFileConfigByExtension,
+  getFileExtension,
   formatFileSize,
   type FileTypeConfig,
 } from "../config/fileConfig";
@@ -75,10 +76,10 @@ export default function Upload({ onBackHome }: UploadProps) {
     }));
 
     try {
-      // Check if file type matches selected
+      // Check if file extension is accepted by the selected type
       if (state.selectedFileType) {
-        const config = getFileConfigByExtension(file.name);
-        if (!config || config.id !== state.selectedFileType.id) {
+        const ext = getFileExtension(file.name);
+        if (!state.selectedFileType.allowedExtensions.includes(ext)) {
           setState((prev) => ({
             ...prev,
             isValidating: false,
