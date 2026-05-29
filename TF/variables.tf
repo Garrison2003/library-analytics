@@ -70,3 +70,17 @@ variable "cors_origin" {
   type        = string
   default     = "*"
 }
+
+# ── Programming Lambda variables ─────────────────────────────────────────────
+
+variable "programming_lambda_memory" {
+  description = "Memory (MB) for the programming Lambda"
+  type        = number
+  default     = 512
+}
+
+variable "programming_lambda_timeout" {
+  description = "Timeout (seconds) for the programming Lambda"
+  type        = number
+  default     = 60
+}
