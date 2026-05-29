@@ -50,6 +50,9 @@ jobs:
       - name: Test – Upload Handler Lambda
         run: cd lambdas/uploadHandlerLambda && python -m pytest tests/ -v
 
+      - name: Test – Programming Lambda
+        run: cd lambdas/programmingLambda && python -m pytest tests/ -v
+
 # ── Deploy ────────────────────────────────────────────────────────────────────
 
   deploy:
@@ -124,6 +127,11 @@ jobs:
         run: |
           zip -j TF/upload_handler_lambda.zip \
             lambdas/uploadHandlerLambda/upload_handler_lambda.py
+
+      - name: Build Programming Lambda
+        run: |
+          zip -j TF/programming_lambda_payload.zip \
+            lambdas/programmingLambda/programming_lambda.py
 
       - name: Build openpyxl Layer
         run: |
