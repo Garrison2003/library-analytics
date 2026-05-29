@@ -6,7 +6,7 @@ Run:  pytest tests/ -v
 
 import json
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 from botocore.exceptions import ClientError
 
@@ -18,6 +18,8 @@ from programming_lambda import (
     _find_data_sheet,
     _parse_date_row,
     _month_year_to_display,
+    _two_fy_cutoff,
+    _filter_to_last_two_fiscal_years,
     parse_workbook,
     handle_s3_event,
     handle_api_request,
@@ -57,15 +59,22 @@ PARSED_DATA = {
     "programs": [67],
 }
 
+# Payload with data spanning three fiscal years so filter tests can verify exclusion
+_MULTI_YEAR_DATA = [
+    {"month": "07/23", "attendance": 900, "programs": 40, "date": "2023-07-01"},  # FY24 — old
+    {"month": "07/24", "attendance": 1500, "programs": 67, "date": "2024-07-01"},  # FY25
+    {"month": "07/25", "attendance": 2000, "programs": 80, "date": "2025-07-01"},  # FY26
+]
+
 BRANCH_PAYLOAD = {
     "branch": "IMG",
     "branchName": "Imaginon",
-    "data": PARSED_DATA["data"],
-    "months": PARSED_DATA["months"],
-    "attendance": PARSED_DATA["attendance"],
-    "programs": PARSED_DATA["programs"],
+    "data": _MULTI_YEAR_DATA,
+    "months": [r["month"] for r in _MULTI_YEAR_DATA],
+    "attendance": [r["attendance"] for r in _MULTI_YEAR_DATA],
+    "programs": [r["programs"] for r in _MULTI_YEAR_DATA],
     "dataFound": True,
-    "lastUpdated": "2024-07-01T00:00:00+00:00",
+    "lastUpdated": "2025-07-01T00:00:00+00:00",
 }
 
 
@@ -200,6 +209,83 @@ class TestMonthYearToDisplay:
         assert _month_year_to_display(12, 24) == "12/24"
 
 
+# ── TestTwoFyCutoff ───────────────────────────────────────────────────────────
+
+
+class TestTwoFyCutoff:
+    def test_during_fy26_cutoff_is_july_2024(self):
+        # May 2026 → current FY starts Jul 2025 → cutoff = Jul 2024
+        now = datetime(2026, 5, 28, tzinfo=timezone.utc)
+        assert _two_fy_cutoff(now) == datetime(2024, 7, 1)
+
+    def test_during_fy26_after_july_cutoff_is_july_2025(self):
+        # October 2026 → current FY starts Jul 2026 → cutoff = Jul 2025
+        now = datetime(2026, 10, 1, tzinfo=timezone.utc)
+        assert _two_fy_cutoff(now) == datetime(2025, 7, 1)
+
+    def test_on_july_1_fy_boundary(self):
+        # July 1 2025 is the first day of FY26 → cutoff = Jul 2024
+        now = datetime(2025, 7, 1, tzinfo=timezone.utc)
+        assert _two_fy_cutoff(now) == datetime(2024, 7, 1)
+
+    def test_june_30_still_in_previous_fy(self):
+        # June 30 2026 is the last day of FY26 → cutoff = Jul 2024
+        now = datetime(2026, 6, 30, tzinfo=timezone.utc)
+        assert _two_fy_cutoff(now) == datetime(2024, 7, 1)
+
+
+# ── TestFilterToLastTwoFiscalYears ────────────────────────────────────────────
+
+
+class TestFilterToLastTwoFiscalYears:
+    # Reference "now": May 2026 → cutoff = Jul 1, 2024
+    _NOW = datetime(2026, 5, 28, tzinfo=timezone.utc)
+
+    def _payload(self, records):
+        return {
+            "branch": "IMG",
+            "branchName": "Imaginon",
+            "dataFound": True,
+            "data": records,
+            "months": [r["month"] for r in records],
+            "attendance": [r["attendance"] for r in records],
+            "programs": [r["programs"] for r in records],
+        }
+
+    def test_excludes_data_before_cutoff(self):
+        payload = self._payload(_MULTI_YEAR_DATA)
+        result = _filter_to_last_two_fiscal_years(payload, self._NOW)
+        assert "07/23" not in result["months"]
+
+    def test_includes_data_at_cutoff(self):
+        payload = self._payload(_MULTI_YEAR_DATA)
+        result = _filter_to_last_two_fiscal_years(payload, self._NOW)
+        assert "07/24" in result["months"]
+
+    def test_includes_current_fy_data(self):
+        payload = self._payload(_MULTI_YEAR_DATA)
+        result = _filter_to_last_two_fiscal_years(payload, self._NOW)
+        assert "07/25" in result["months"]
+
+    def test_parallel_arrays_match_filtered_data(self):
+        payload = self._payload(_MULTI_YEAR_DATA)
+        result = _filter_to_last_two_fiscal_years(payload, self._NOW)
+        assert len(result["months"]) == len(result["attendance"]) == len(result["programs"])
+        assert result["months"] == [r["month"] for r in result["data"]]
+
+    def test_non_data_fields_are_preserved(self):
+        payload = self._payload(_MULTI_YEAR_DATA)
+        result = _filter_to_last_two_fiscal_years(payload, self._NOW)
+        assert result["branch"] == "IMG"
+        assert result["dataFound"] is True
+
+    def test_empty_data_returns_empty(self):
+        payload = self._payload([])
+        result = _filter_to_last_two_fiscal_years(payload, self._NOW)
+        assert result["data"] == []
+        assert result["months"] == []
+
+
 # ── TestParseWorkbook ─────────────────────────────────────────────────────────
 
 
@@ -304,8 +390,8 @@ class TestHandleS3Event:
         with patch("programming_lambda.parse_workbook", return_value=PARSED_DATA):
             handle_s3_event(self._event())
         body = json.loads(mock_s3.put_object.call_args.kwargs["Body"])
-        assert body["months"] == ["07/24"]
-        assert body["attendance"] == [1500]
+        assert "07/24" in body["months"]
+        assert 1500 in body["attendance"]
 
     def test_uses_processed_bucket_env_when_set(self, mock_s3, monkeypatch):
         monkeypatch.setenv("PROCESSED_BUCKET", "proc-bucket")
@@ -393,6 +479,20 @@ class TestHandleApiRequest:
         mock_s3.get_object.return_value = _s3_body(json.dumps(BRANCH_PAYLOAD).encode())
         resp = handle_api_request(_api_event("IMG"))
         assert resp["headers"]["Access-Control-Allow-Origin"] == "*"
+
+    def test_api_response_excludes_data_older_than_two_fiscal_years(self, mock_s3):
+        mock_s3.get_object.return_value = _s3_body(json.dumps(BRANCH_PAYLOAD).encode())
+        resp = handle_api_request(_api_event("IMG"))
+        months = json.loads(resp["body"])["data"]["months"]
+        # "07/23" belongs to FY24 which is outside the last-two-FY window
+        assert "07/23" not in months
+
+    def test_api_response_includes_last_two_fiscal_years(self, mock_s3):
+        mock_s3.get_object.return_value = _s3_body(json.dumps(BRANCH_PAYLOAD).encode())
+        resp = handle_api_request(_api_event("IMG"))
+        months = json.loads(resp["body"])["data"]["months"]
+        assert "07/24" in months
+        assert "07/25" in months
 
 
 # ── TestLambdaHandler ─────────────────────────────────────────────────────────
