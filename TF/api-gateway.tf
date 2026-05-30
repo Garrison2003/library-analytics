@@ -123,7 +123,7 @@ resource "aws_api_gateway_integration" "get_programming" {
   http_method             = aws_api_gateway_method.get_programming.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.programming_lambda.invoke_arn
+  uri                     = aws_lambda_function.programmingAPI.invoke_arn
 }
 
 # ── OPTIONS /programming (CORS preflight) ───────────────────────────────────────
@@ -183,7 +183,7 @@ resource "aws_api_gateway_integration_response" "options_programming_200" {
 resource "aws_lambda_permission" "api_gateway_programming" {
   statement_id  = "AllowAPIGatewayInvokeProgramming"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.programming_lambda.function_name
+  function_name = aws_lambda_function.programmingAPI.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.circulation.execution_arn}/*/*"
 }
@@ -209,6 +209,16 @@ resource "aws_api_gateway_deployment" "circulation" {
       aws_api_gateway_integration.upload_validate_post_lambda.id,
       aws_api_gateway_integration.options_upload.id,
       aws_api_gateway_integration.options_upload_validate.id,
+      aws_api_gateway_resource.programming_history.id,
+      aws_api_gateway_method.get_programming_history.id,
+      aws_api_gateway_integration.get_programming_history.id,
+      aws_api_gateway_method.options_programming_history.id,
+      aws_api_gateway_integration.options_programming_history.id,
+      aws_api_gateway_resource.programming_compare.id,
+      aws_api_gateway_method.get_programming_compare.id,
+      aws_api_gateway_integration.get_programming_compare.id,
+      aws_api_gateway_method.options_programming_compare.id,
+      aws_api_gateway_integration.options_programming_compare.id,
     ]))
   }
 
@@ -225,6 +235,10 @@ resource "aws_api_gateway_deployment" "circulation" {
     aws_api_gateway_integration.upload_validate_post_lambda,
     aws_api_gateway_integration.options_upload,
     aws_api_gateway_integration.options_upload_validate,
+    aws_api_gateway_integration.get_programming_history,
+    aws_api_gateway_integration.options_programming_history,
+    aws_api_gateway_integration.get_programming_compare,
+    aws_api_gateway_integration.options_programming_compare,
   ]
 }
 
@@ -408,4 +422,172 @@ resource "aws_api_gateway_integration_response" "options_upload_validate_200" {
   }
 
   depends_on = [aws_api_gateway_integration.options_upload_validate]
+}
+
+# ── /programming/history resource (Historical data queries) ──────────────────
+
+resource "aws_api_gateway_resource" "programming_history" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  parent_id   = aws_api_gateway_resource.programming.id
+  path_part   = "history"
+}
+
+# ── GET /programming/history?branch=IMG&months=12 ────────────────────────────
+
+resource "aws_api_gateway_method" "get_programming_history" {
+  rest_api_id   = aws_api_gateway_rest_api.circulation.id
+  resource_id   = aws_api_gateway_resource.programming_history.id
+  http_method   = "GET"
+  authorization = "NONE"
+
+  request_parameters = {
+    "method.request.querystring.branch" = true
+    "method.request.querystring.months" = false  # Optional, defaults to 12
+  }
+}
+
+# ── Integration: API Gateway → programmingDataParser Lambda ──────────────────
+
+resource "aws_api_gateway_integration" "get_programming_history" {
+  rest_api_id             = aws_api_gateway_rest_api.circulation.id
+  resource_id             = aws_api_gateway_resource.programming_history.id
+  http_method             = aws_api_gateway_method.get_programming_history.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.programmingDataParser.invoke_arn
+}
+
+# ── OPTIONS /programming/history (CORS Preflight) ────────────────────────────
+
+resource "aws_api_gateway_method" "options_programming_history" {
+  rest_api_id   = aws_api_gateway_rest_api.circulation.id
+  resource_id   = aws_api_gateway_resource.programming_history.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_programming_history" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.programming_history.id
+  http_method = aws_api_gateway_method.options_programming_history.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+resource "aws_api_gateway_method_response" "options_programming_history_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.programming_history.id
+  http_method = aws_api_gateway_method.options_programming_history.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_programming_history_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.programming_history.id
+  http_method = aws_api_gateway_method.options_programming_history.http_method
+  status_code = aws_api_gateway_method_response.options_programming_history_200.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'${var.cors_origin}'"
+  }
+
+  depends_on = [aws_api_gateway_integration.options_programming_history]
+}
+
+# ── Lambda Permissions ───────────────────────────────────────────────────────
+
+resource "aws_lambda_permission" "api_gateway_programming_history" {
+  statement_id  = "AllowAPIGatewayInvokeProgrammingHistory"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.programmingDataParser.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.circulation.execution_arn}/*/*"
+}
+
+# ── Compare Endpoint: /programming/compare?branches=IMG,MAI,PLZ ───────────────
+
+resource "aws_api_gateway_resource" "programming_compare" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  parent_id   = aws_api_gateway_resource.programming.id
+  path_part   = "compare"
+}
+
+resource "aws_api_gateway_method" "get_programming_compare" {
+  rest_api_id   = aws_api_gateway_rest_api.circulation.id
+  resource_id   = aws_api_gateway_resource.programming_compare.id
+  http_method   = "GET"
+  authorization = "NONE"
+
+  request_parameters = {
+    "method.request.querystring.branches" = true  # Comma-separated codes
+    "method.request.querystring.month"    = false # Optional: specific month
+  }
+}
+
+resource "aws_api_gateway_integration" "get_programming_compare" {
+  rest_api_id             = aws_api_gateway_rest_api.circulation.id
+  resource_id             = aws_api_gateway_resource.programming_compare.id
+  http_method             = aws_api_gateway_method.get_programming_compare.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.programmingDataParser.invoke_arn
+}
+
+# ── OPTIONS /programming/compare ─────────────────────────────────────────────
+
+resource "aws_api_gateway_method" "options_programming_compare" {
+  rest_api_id   = aws_api_gateway_rest_api.circulation.id
+  resource_id   = aws_api_gateway_resource.programming_compare.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_programming_compare" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.programming_compare.id
+  http_method = aws_api_gateway_method.options_programming_compare.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+resource "aws_api_gateway_method_response" "options_programming_compare_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.programming_compare.id
+  http_method = aws_api_gateway_method.options_programming_compare.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_programming_compare_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.programming_compare.id
+  http_method = aws_api_gateway_method.options_programming_compare.http_method
+  status_code = aws_api_gateway_method_response.options_programming_compare_200.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'${var.cors_origin}'"
+  }
+
+  depends_on = [aws_api_gateway_integration.options_programming_compare]
 }

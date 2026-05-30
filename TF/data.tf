@@ -17,8 +17,14 @@ data "archive_file" "upload_handler_lambda_zip" {
   output_path = "upload_handler_lambda.zip"
 }
 
-data "archive_file" "programming_lambda_zip" {
+data "archive_file" "programmingAPI_zip" {
   type        = "zip"
-  source_file = "../lambdas/programmingLambda/programming_lambda.py"
-  output_path = "programming_lambda_payload.zip"
+  source_file = "../lambdas/programmingDataParser/programming_data_parser_lambda.py"
+  output_path = "programming_data_parser_lambda.zip"
+}
+
+data "archive_file" "programming_history_lambda_zip" {
+  type        = "zip"
+  source_file = "../lambdas/programmingHistoryAPI/programming_history_api_lambda.py"
+  output_path = "programming_history_api_lambda.zip"
 }

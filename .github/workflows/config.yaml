@@ -50,8 +50,11 @@ jobs:
       - name: Test – Upload Handler Lambda
         run: cd lambdas/uploadHandlerLambda && python -m pytest tests/ -v
 
-      - name: Test – Programming Lambda
-        run: cd lambdas/programmingLambda && python -m pytest tests/ -v
+      - name: Test – programmingAPI Lambda
+        run: cd lambdas/programmingDataParser && python -m pytest tests/ -v
+
+      - name: Test – programmingDataParser Lambda
+        run: cd lambdas/programmingHistoryAPI && python -m pytest tests/ -v
 
 # ── Deploy ────────────────────────────────────────────────────────────────────
 
@@ -128,10 +131,15 @@ jobs:
           zip -j TF/upload_handler_lambda.zip \
             lambdas/uploadHandlerLambda/upload_handler_lambda.py
 
-      - name: Build Programming Lambda
+      - name: Build programmingAPI Lambda
         run: |
-          zip -j TF/programming_lambda_payload.zip \
-            lambdas/programmingLambda/programming_lambda.py
+          zip -j TF/programming_data_parser_lambda.zip \
+            lambdas/programmingDataParser/programming_data_parser_lambda.py
+
+      - name: Build programmingDataParser Lambda
+        run: |
+          zip -j TF/programming_history_api_lambda.zip \
+            lambdas/programmingHistoryAPI/programming_history_api_lambda.py
 
       - name: Build openpyxl Layer
         run: |
