@@ -209,6 +209,99 @@ resource "aws_iam_role_policy" "programming_lambda" {
         Effect   = "Allow"
         Action   = ["s3:GetObject"]
         Resource = "${aws_s3_bucket.circulation.arn}/processed/programming/*"
+      },
+      # ── DynamoDB Permissions ────────────────────────────────────
+      {
+        Sid      = "DynamoDBProgrammingDataWrite"
+        Effect   = "Allow"
+        Action   = [
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:BatchWriteItem"
+        ]
+        Resource = aws_dynamodb_table.programming_data.arn
+      },
+      {
+        Sid      = "DynamoDBProgrammingDataRead"
+        Effect   = "Allow"
+        Action   = [
+          "dynamodb:Query",
+          "dynamodb:GetItem",
+          "dynamodb:Scan"
+        ]
+        Resource = aws_dynamodb_table.programming_data.arn
+      },
+      {
+        Sid      = "DynamoDBProgrammingDataGSI"
+        Effect   = "Allow"
+        Action   = [
+          "dynamodb:Query"
+        ]
+        Resource = "${aws_dynamodb_table.programming_data.arn}/index/DateIndex"
+      },
+      {
+        Sid      = "DynamoDBMetadataWrite"
+        Effect   = "Allow"
+        Action   = [
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem"
+        ]
+        Resource = aws_dynamodb_table.branch_metadata.arn
+      },
+      {
+        Sid      = "DynamoDBMetadataRead"
+        Effect   = "Allow"
+        Action   = [
+          "dynamodb:GetItem",
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ]
+        Resource = aws_dynamodb_table.branch_metadata.arn
+      }
+    ]
+  })
+}
+
+# ── Optional: IAM Role for DynamoDB API Access (if needed for direct access) ──
+
+resource "aws_iam_role" "dynamodb_api_access" {
+  count = var.create_dynamodb_api_role ? 1 : 0
+  name  = "${var.project_name}-dynamodb-api-access-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "apigateway.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "dynamodb_api_access" {
+  count = var.create_dynamodb_api_role ? 1 : 0
+  name  = "${var.project_name}-dynamodb-api-access-policy"
+  role  = aws_iam_role.dynamodb_api_access[0].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:Query",
+          "dynamodb:GetItem",
+          "dynamodb:Scan"
+        ]
+        Resource = [
+          aws_dynamodb_table.programming_data.arn,
+          "${aws_dynamodb_table.programming_data.arn}/index/DateIndex",
+          aws_dynamodb_table.branch_metadata.arn
+        ]
       }
     ]
   })

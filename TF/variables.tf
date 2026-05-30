@@ -146,3 +146,9 @@ variable "dynamodb_retention_years" {
   type        = number
   default     = 5
 }
+
+variable "create_dynamodb_api_role" {
+  description = "Whether to create an IAM role for API Gateway direct DynamoDB access"
+  type        = bool
+  default     = false
+}
