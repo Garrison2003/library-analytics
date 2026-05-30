@@ -150,10 +150,10 @@ resource "aws_iam_role_policy" "upload_lambda_logs_policy" {
   })
 }
 
-# ── Programming Statistics Lambda role ───────────────────────────────────────
+# ── Programming History Lambda role ──────────────────────────────────────────
 
-resource "aws_iam_role" "programming_lambda" {
-  name = "${var.project_name}-programming-lambda-${var.environment}"
+resource "aws_iam_role" "programming_history_lambda" {
+  name = "${var.project_name}-programming-history-lambda-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -169,9 +169,68 @@ resource "aws_iam_role" "programming_lambda" {
   })
 }
 
-resource "aws_iam_role_policy" "programming_lambda" {
-  name = "${var.project_name}-programming-policy"
-  role = aws_iam_role.programming_lambda.id
+resource "aws_iam_role_policy" "programming_history_lambda" {
+  name = "${var.project_name}-programming-history-policy"
+  role = aws_iam_role.programming_history_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Logging"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      },
+      {
+        Sid    = "DynamoDBRead"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:Query",
+          "dynamodb:GetItem",
+          "dynamodb:Scan"
+        ]
+        Resource = [
+          aws_dynamodb_table.programming_data.arn,
+          aws_dynamodb_table.branch_metadata.arn
+        ]
+      },
+      {
+        Sid    = "DynamoDBGSI"
+        Effect = "Allow"
+        Action = ["dynamodb:Query"]
+        Resource = "${aws_dynamodb_table.programming_data.arn}/index/DateIndex"
+      }
+    ]
+  })
+}
+
+# ── programmingAPI Lambda role ────────────────────────────────────────────────
+
+resource "aws_iam_role" "programmingAPI" {
+  name = "${var.project_name}-programmingAPI-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "programmingAPI" {
+  name = "${var.project_name}-programmingAPI-policy"
+  role = aws_iam_role.programmingAPI.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -210,7 +269,6 @@ resource "aws_iam_role_policy" "programming_lambda" {
         Action   = ["s3:GetObject"]
         Resource = "${aws_s3_bucket.circulation.arn}/processed/programming/*"
       },
-      # ── DynamoDB Permissions ────────────────────────────────────
       {
         Sid      = "DynamoDBProgrammingDataWrite"
         Effect   = "Allow"
@@ -234,9 +292,7 @@ resource "aws_iam_role_policy" "programming_lambda" {
       {
         Sid      = "DynamoDBProgrammingDataGSI"
         Effect   = "Allow"
-        Action   = [
-          "dynamodb:Query"
-        ]
+        Action   = ["dynamodb:Query"]
         Resource = "${aws_dynamodb_table.programming_data.arn}/index/DateIndex"
       },
       {

@@ -86,36 +86,72 @@ resource "aws_cloudwatch_log_group" "upload_lambda_logs" {
   }
 }
 
-# ── Programming Statistics Lambda ───────────────────────────────────────────
+# ── programmingDataParser Lambda (historical DynamoDB queries) ────────────────
 
-resource "aws_lambda_function" "programming_lambda" {
-  filename         = "programming_lambda_payload.zip"
-  function_name    = "${var.project_name}-programming-${var.environment}"
-  role             = aws_iam_role.programming_lambda.arn
-  handler          = "programming_lambda.lambda_handler"
+resource "aws_lambda_function" "programmingDataParser" {
+  filename         = "programming_history_api_lambda.zip"
+  function_name    = "${var.project_name}-programmingDataParser-${var.environment}"
+  role             = aws_iam_role.programming_history_lambda.arn
+  handler          = "programming_history_api_lambda.lambda_handler"
   runtime          = "python3.12"
-  memory_size      = var.programming_lambda_memory
-  timeout          = var.programming_lambda_timeout
-  source_code_hash = data.archive_file.programming_lambda_zip.output_base64sha256
-  layers           = [aws_lambda_layer_version.openpyxl.arn]
+  memory_size      = 512
+  timeout          = 30
+  source_code_hash = data.archive_file.programming_history_lambda_zip.output_base64sha256
 
   environment {
     variables = {
-      PROCESSED_BUCKET = aws_s3_bucket.circulation.id
+      DYNAMODB_TABLE          = aws_dynamodb_table.programming_data.name
+      DYNAMODB_METADATA_TABLE = aws_dynamodb_table.branch_metadata.name
     }
   }
 
   tags = {
-    Name        = "${var.project_name}-programming-lambda"
+    Name        = "${var.project_name}-programmingDataParser"
     Environment = var.environment
   }
 }
 
-resource "aws_cloudwatch_log_group" "programming_lambda" {
-  name              = "/aws/lambda/${aws_lambda_function.programming_lambda.function_name}"
+resource "aws_cloudwatch_log_group" "programmingDataParser" {
+  name              = "/aws/lambda/${aws_lambda_function.programmingDataParser.function_name}"
   retention_in_days = 7
 
   tags = {
-    Name = "${var.project_name}-programming-lambda-logs"
+    Name = "${var.project_name}-programmingDataParser-logs"
+  }
+}
+
+# ── programmingAPI Lambda (S3 parser + GET /programming) ──────────────────────
+
+resource "aws_lambda_function" "programmingAPI" {
+  filename         = "programming_data_parser_lambda.zip"
+  function_name    = "${var.project_name}-programmingAPI-${var.environment}"
+  role             = aws_iam_role.programmingAPI.arn
+  handler          = "programming_data_parser_lambda.lambda_handler"
+  runtime          = "python3.12"
+  memory_size      = var.programming_lambda_memory
+  timeout          = var.programming_lambda_timeout
+  source_code_hash = data.archive_file.programmingAPI_zip.output_base64sha256
+  layers           = [aws_lambda_layer_version.openpyxl.arn]
+
+  environment {
+    variables = {
+      PROCESSED_BUCKET        = aws_s3_bucket.circulation.id
+      DYNAMODB_TABLE          = aws_dynamodb_table.programming_data.name
+      DYNAMODB_METADATA_TABLE = aws_dynamodb_table.branch_metadata.name
+    }
+  }
+
+  tags = {
+    Name        = "${var.project_name}-programmingAPI"
+    Environment = var.environment
+  }
+}
+
+resource "aws_cloudwatch_log_group" "programmingAPI" {
+  name              = "/aws/lambda/${aws_lambda_function.programmingAPI.function_name}"
+  retention_in_days = 7
+
+  tags = {
+    Name = "${var.project_name}-programmingAPI-logs"
   }
 }

@@ -123,7 +123,7 @@ resource "aws_api_gateway_integration" "get_programming" {
   http_method             = aws_api_gateway_method.get_programming.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.programming_lambda.invoke_arn
+  uri                     = aws_lambda_function.programmingAPI.invoke_arn
 }
 
 # ── OPTIONS /programming (CORS preflight) ───────────────────────────────────────
@@ -183,7 +183,7 @@ resource "aws_api_gateway_integration_response" "options_programming_200" {
 resource "aws_lambda_permission" "api_gateway_programming" {
   statement_id  = "AllowAPIGatewayInvokeProgramming"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.programming_lambda.function_name
+  function_name = aws_lambda_function.programmingAPI.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.circulation.execution_arn}/*/*"
 }
@@ -446,41 +446,7 @@ resource "aws_api_gateway_method" "get_programming_history" {
   }
 }
 
-# ── Lambda for History Queries (New Lambda Function) ────────────────────────
-
-resource "aws_lambda_function" "programming_history" {
-  filename         = "programming_history_lambda.zip"
-  function_name    = "${var.project_name}-programming-history-${var.environment}"
-  role             = aws_iam_role.programming_history_lambda.arn
-  handler          = "programming_history_lambda.lambda_handler"
-  runtime          = "python3.12"
-  memory_size      = 512
-  timeout          = 30
-  source_code_hash = data.archive_file.programming_history_lambda_zip.output_base64sha256
-
-  environment {
-    variables = {
-      DYNAMODB_TABLE          = aws_dynamodb_table.programming_data.name
-      DYNAMODB_METADATA_TABLE = aws_dynamodb_table.branch_metadata.name
-    }
-  }
-
-  tags = {
-    Name        = "${var.project_name}-programming-history"
-    Environment = var.environment
-  }
-}
-
-resource "aws_cloudwatch_log_group" "programming_history_lambda" {
-  name              = "/aws/lambda/${aws_lambda_function.programming_history.function_name}"
-  retention_in_days = 7
-
-  tags = {
-    Name = "${var.project_name}-programming-history-logs"
-  }
-}
-
-# ── Integration: API Gateway → History Lambda ────────────────────────────────
+# ── Integration: API Gateway → programmingDataParser Lambda ──────────────────
 
 resource "aws_api_gateway_integration" "get_programming_history" {
   rest_api_id             = aws_api_gateway_rest_api.circulation.id
@@ -488,7 +454,7 @@ resource "aws_api_gateway_integration" "get_programming_history" {
   http_method             = aws_api_gateway_method.get_programming_history.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.programming_history.invoke_arn
+  uri                     = aws_lambda_function.programmingDataParser.invoke_arn
 }
 
 # ── OPTIONS /programming/history (CORS Preflight) ────────────────────────────
@@ -544,19 +510,10 @@ resource "aws_api_gateway_integration_response" "options_programming_history_200
 resource "aws_lambda_permission" "api_gateway_programming_history" {
   statement_id  = "AllowAPIGatewayInvokeProgrammingHistory"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.programming_history.function_name
+  function_name = aws_lambda_function.programmingDataParser.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.circulation.execution_arn}/*/*"
 }
-
-# ── Archive File for History Lambda ──────────────────────────────────────────
-
-# Add to data.tf:
-# data "archive_file" "programming_history_lambda_zip" {
-#   type        = "zip"
-#   source_file = "programming_history_lambda.py"
-#   output_path = "programming_history_lambda.zip"
-# }
 
 # ── Compare Endpoint: /programming/compare?branches=IMG,MAI,PLZ ───────────────
 
@@ -584,7 +541,7 @@ resource "aws_api_gateway_integration" "get_programming_compare" {
   http_method             = aws_api_gateway_method.get_programming_compare.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.programming_history.invoke_arn
+  uri                     = aws_lambda_function.programmingDataParser.invoke_arn
 }
 
 # ── OPTIONS /programming/compare ─────────────────────────────────────────────
