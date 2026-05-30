@@ -209,6 +209,16 @@ resource "aws_api_gateway_deployment" "circulation" {
       aws_api_gateway_integration.upload_validate_post_lambda.id,
       aws_api_gateway_integration.options_upload.id,
       aws_api_gateway_integration.options_upload_validate.id,
+      aws_api_gateway_resource.programming_history.id,
+      aws_api_gateway_method.get_programming_history.id,
+      aws_api_gateway_integration.get_programming_history.id,
+      aws_api_gateway_method.options_programming_history.id,
+      aws_api_gateway_integration.options_programming_history.id,
+      aws_api_gateway_resource.programming_compare.id,
+      aws_api_gateway_method.get_programming_compare.id,
+      aws_api_gateway_integration.get_programming_compare.id,
+      aws_api_gateway_method.options_programming_compare.id,
+      aws_api_gateway_integration.options_programming_compare.id,
     ]))
   }
 
@@ -225,6 +235,10 @@ resource "aws_api_gateway_deployment" "circulation" {
     aws_api_gateway_integration.upload_validate_post_lambda,
     aws_api_gateway_integration.options_upload,
     aws_api_gateway_integration.options_upload_validate,
+    aws_api_gateway_integration.get_programming_history,
+    aws_api_gateway_integration.options_programming_history,
+    aws_api_gateway_integration.get_programming_compare,
+    aws_api_gateway_integration.options_programming_compare,
   ]
 }
 
@@ -620,22 +634,3 @@ resource "aws_api_gateway_integration_response" "options_programming_compare_200
 
   depends_on = [aws_api_gateway_integration.options_programming_compare]
 }
-
-# ── Update API Deployment ────────────────────────────────────────────────────
-# Update your existing aws_api_gateway_deployment to include the new resources:
-
-# triggers = {
-#   redeployment = sha1(jsonencode([
-#     # ... existing resources ...
-#     aws_api_gateway_resource.programming_history.id,
-#     aws_api_gateway_method.get_programming_history.id,
-#     aws_api_gateway_integration.get_programming_history.id,
-#     aws_api_gateway_method.options_programming_history.id,
-#     aws_api_gateway_integration.options_programming_history.id,
-#     aws_api_gateway_resource.programming_compare.id,
-#     aws_api_gateway_method.get_programming_compare.id,
-#     aws_api_gateway_integration.get_programming_compare.id,
-#     aws_api_gateway_method.options_programming_compare.id,
-#     aws_api_gateway_integration.options_programming_compare.id,
-#   ]))
-# }
