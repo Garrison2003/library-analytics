@@ -84,3 +84,65 @@ variable "programming_lambda_timeout" {
   type        = number
   default     = 60
 }
+
+# ── DynamoDB Configuration ───────────────────────────────────────────────────
+
+variable "dynamodb_billing_mode" {
+  description = "DynamoDB billing mode: PAY_PER_REQUEST (recommended) or PROVISIONED"
+  type        = string
+  default     = "PAY_PER_REQUEST"  # Auto-scales, no capacity planning needed
+  
+  validation {
+    condition     = contains(["PAY_PER_REQUEST", "PROVISIONED"], var.dynamodb_billing_mode)
+    error_message = "Billing mode must be either PAY_PER_REQUEST or PROVISIONED."
+  }
+}
+
+# Provisioned Capacity (only used if billing_mode = "PROVISIONED")
+variable "dynamodb_read_capacity" {
+  description = "Read capacity units for programming_data table (if using PROVISIONED mode)"
+  type        = number
+  default     = 200  # Handles ~50 concurrent users
+}
+
+variable "dynamodb_write_capacity" {
+  description = "Write capacity units for programming_data table (if using PROVISIONED mode)"
+  type        = number
+  default     = 5    # Handles monthly uploads + updates
+}
+
+variable "dynamodb_gsi_read_capacity" {
+  description = "Read capacity units for DateIndex GSI (if using PROVISIONED mode)"
+  type        = number
+  default     = 100  # Handles branch comparisons
+}
+
+variable "dynamodb_gsi_write_capacity" {
+  description = "Write capacity units for DateIndex GSI (if using PROVISIONED mode)"
+  type        = number
+  default     = 5    # Same as main table
+}
+
+variable "dynamodb_metadata_read_capacity" {
+  description = "Read capacity units for branch_metadata table (if using PROVISIONED mode)"
+  type        = number
+  default     = 10   # Low traffic
+}
+
+variable "dynamodb_metadata_write_capacity" {
+  description = "Write capacity units for branch_metadata table (if using PROVISIONED mode)"
+  type        = number
+  default     = 5    # Updates on each upload
+}
+
+variable "dynamodb_enable_ttl" {
+  description = "Enable Time-to-Live to auto-delete data older than specified age"
+  type        = bool
+  default     = false  # Set to true if you want auto-deletion
+}
+
+variable "dynamodb_retention_years" {
+  description = "Number of years to retain data before auto-deletion (if TTL enabled)"
+  type        = number
+  default     = 5
+}
