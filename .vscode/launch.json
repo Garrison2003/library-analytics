@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug timeSeriesLambda (Python)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/lambdas/timeSeriesLambda/local.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "AWS_REGION": "us-east-1",
+        "AWS_PROFILE": "default"
+      }
+    }
+  ]
+}
