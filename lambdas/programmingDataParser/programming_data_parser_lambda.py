@@ -702,4 +702,12 @@ def handle_s3_event(event: dict) -> dict:
 def lambda_handler(event, context):
     """S3 PUT trigger only — parses uploaded programming files and writes to DynamoDB."""
     logger.info("Event: %s", json.dumps(event, default=str)[:500])
+
+    if "Records" not in event:
+        logger.error("Non-S3 event received — this lambda is an S3 trigger only")
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "This lambda only handles S3 events"}),
+        }
+
     return handle_s3_event(event)
