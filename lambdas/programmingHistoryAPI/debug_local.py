@@ -41,8 +41,12 @@ class MockLambdaContext:
 def _print_response(result: dict) -> None:
     """Format and print Lambda response with parsed body."""
     if "body" in result:
-        body = json.loads(result["body"])
-        print(json.dumps({"statusCode": result["statusCode"], "body": body}, indent=2, default=str))
+        body_str = result["body"]
+        if body_str:  # Only parse if body is not empty
+            body = json.loads(body_str)
+            print(json.dumps({"statusCode": result["statusCode"], "body": body}, indent=2, default=str))
+        else:
+            print(json.dumps({"statusCode": result["statusCode"], "body": ""}, indent=2))
     else:
         print(json.dumps(result, indent=2, default=str))
 
