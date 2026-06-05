@@ -98,5 +98,12 @@ resource "aws_s3_bucket_notification" "programming_trigger" {
     filter_suffix       = ".xlsx"
   }
 
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.programmingDataParser.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "uploads/programming/"
+    filter_suffix       = ".pdf"
+  }
+
   depends_on = [aws_lambda_permission.s3_invoke_programming]
 }
