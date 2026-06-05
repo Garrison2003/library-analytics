@@ -237,8 +237,9 @@ const ProgrammingCharts: React.FC<ProgrammingChartsProps> = ({
 
         if (json.success && json.data) {
           const raw = json.data;
-          // Format "2025-07" → "Jul 25" for chart labels
-          const formattedMonths = (raw.months as string[]).map((ym) => {
+          // Format "2025-07" → "Jul 25" for chart labels.
+          // months may be absent when dataFound is false — default to [].
+          const formattedMonths = ((raw.months as string[] | undefined) ?? []).map((ym) => {
             const [year, month] = ym.split("-");
             const date = new Date(Number(year), Number(month) - 1, 1);
             return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });

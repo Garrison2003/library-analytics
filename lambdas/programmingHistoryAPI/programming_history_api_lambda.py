@@ -11,6 +11,7 @@ Returns historical data for trend analysis and comparisons.
 import json
 import logging
 import os
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from decimal import Decimal
@@ -28,6 +29,7 @@ dynamodb = boto3.resource("dynamodb")
 BRANCH_CODE_MAP = {
     "ALW": "Allegra Westbrooks Regional",
     "CAR": "Carmel",
+    "TEL": "Teen Loft",
     "CHS": "Charlotte",
     "COM": "Community",
     "COR": "Cornelius",
@@ -58,6 +60,12 @@ BRANCH_CODE_MAP = {
     "WES": "West",
 }
 
+# Departments that roll up into a parent branch.
+# When the parent is queried, all department records are aggregated.
+BRANCH_DEPARTMENTS: Dict[str, list] = {
+    "IMG": ["SPA", "TEL"],  # Imaginon = Spangler + Teen Loft
+}
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _env(name: str, fallback: str = "") -> str:
@@ -82,35 +90,51 @@ def _convert_decimal(obj):
 
 # ── DynamoDB Queries ─────────────────────────────────────────────────────────
 
+def _query_branch_items(table, branch_code: str, months: int) -> List[Dict]:
+    """Query DynamoDB for all months of a single branch code."""
+    response = table.query(
+        KeyConditionExpression="branch_code = :code",
+        ExpressionAttributeValues={":code": branch_code},
+        ScanIndexForward=False,
+        Limit=months,
+    )
+    return response.get("Items", [])
+
+
 def get_branch_history(branch_code: str, months: int = 12) -> Optional[Dict]:
     """
-    Get historical data for a single branch.
-    
-    Args:
-        branch_code: 3-letter code (IMG, MAI, etc.)
-        months: Number of months to retrieve (default: 12)
-    
-    Returns:
-        Dict with historical data or None if error
+    Get historical programming data for a branch.
+
+    If the branch has departments (e.g. Imaginon → Spangler + Teen Loft),
+    all department records are queried and their monthly totals are summed
+    before returning. Each department uploads its own PDF independently;
+    this aggregation combines them transparently for the caller.
     """
     table_name = _env("DYNAMODB_TABLE", "programming-data")
-    
+
     try:
         table = dynamodb.Table(table_name)
-        
-        # Query: all months for this branch
-        response = table.query(
-            KeyConditionExpression="branch_code = :code",
-            ExpressionAttributeValues={
-                ":code": branch_code
-            },
-            ScanIndexForward=False,  # Newest first
-            Limit=months  # Limit to requested months
-        )
-        
-        items = response.get("Items", [])
-        
-        if not items:
+
+        # Collect all codes to query: the branch itself plus any departments
+        department_codes = BRANCH_DEPARTMENTS.get(branch_code, [])
+        all_codes = [branch_code] + department_codes
+
+        # Aggregate monthly totals across all codes.
+        # Key: year_month string; value: running totals dict.
+        monthly: Dict[str, Dict] = {}
+
+        for code in all_codes:
+            for item in _query_branch_items(table, code, months):
+                ym = item.get("year_month")
+                if not ym:
+                    continue
+                if ym not in monthly:
+                    monthly[ym] = {"attendance": 0, "programs": 0, "virtual_attendance": 0}
+                monthly[ym]["attendance"] += int(item.get("attendance", 0))
+                monthly[ym]["programs"] += int(item.get("programs", 0))
+                monthly[ym]["virtual_attendance"] += int(item.get("virtual_attendance", 0))
+
+        if not monthly:
             logger.info("No data found for branch %s", branch_code)
             return {
                 "branch": branch_code,
@@ -118,49 +142,44 @@ def get_branch_history(branch_code: str, months: int = 12) -> Optional[Dict]:
                 "data": [],
                 "dataFound": False,
             }
-        
-        # Sort by year_month descending (newest first) for display
-        items = sorted(items, key=lambda x: x["year_month"], reverse=True)
-        
-        # Extract data
+
+        # Sort newest-first, cap at requested months
+        sorted_months = sorted(monthly.keys(), reverse=True)[:months]
+
         data = []
         months_list = []
         attendance_list = []
         programs_list = []
-        
-        for item in items:
-            year_month = item.get("year_month")
-            attendance = int(item.get("attendance", 0))
-            programs = int(item.get("programs", 0))
-            virtual = int(item.get("virtual_attendance", 0))
-            
+
+        for ym in sorted_months:
+            entry = monthly[ym]
+            months_list.append(ym)
+            attendance_list.append(entry["attendance"])
+            programs_list.append(entry["programs"])
             data.append({
-                "year_month": year_month,
-                "attendance": attendance,
-                "programs": programs,
-                "virtual_attendance": virtual,
-                "date": f"{year_month}-01",
+                "year_month": ym,
+                "attendance": entry["attendance"],
+                "programs": entry["programs"],
+                "virtual_attendance": entry["virtual_attendance"],
+                "date": f"{ym}-01",
             })
-            
-            months_list.append(year_month)
-            attendance_list.append(attendance)
-            programs_list.append(programs)
-        
-        # Calculate metrics
+
         total_attendance = sum(attendance_list)
         total_programs = sum(programs_list)
         avg_attendance = total_attendance // len(attendance_list) if attendance_list else 0
-        
-        # Calculate growth (latest vs oldest)
+
         growth = None
         if len(attendance_list) >= 2:
             oldest = attendance_list[-1]
             newest = attendance_list[0]
             if oldest > 0:
                 growth = ((newest - oldest) / oldest) * 100
-        
-        logger.info("Retrieved %d months for branch %s", len(items), branch_code)
-        
+
+        logger.info(
+            "Retrieved %d months for branch %s (codes: %s)",
+            len(sorted_months), branch_code, all_codes,
+        )
+
         return {
             "branch": branch_code,
             "branchName": _get_branch_name(branch_code),
@@ -177,7 +196,7 @@ def get_branch_history(branch_code: str, months: int = 12) -> Optional[Dict]:
             "dataFound": True,
             "lastUpdated": datetime.now(timezone.utc).isoformat(),
         }
-        
+
     except Exception as exc:
         logger.exception("Error querying branch history: %s", str(exc))
         return None
@@ -286,7 +305,8 @@ def _api_ok(data: Any) -> dict:
         "body": json.dumps({
             "success": True,
             "data": data,
-            "error": None,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "requestId": f"req_{uuid.uuid4().hex[:12]}",
         }, default=_convert_decimal),
     }
 
@@ -303,6 +323,8 @@ def _api_err(status: int, code: str, message: str) -> dict:
             "success": False,
             "data": None,
             "error": {"code": code, "message": message},
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "requestId": f"req_{uuid.uuid4().hex[:12]}",
         }),
     }
 
