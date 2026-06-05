@@ -17,7 +17,7 @@ data "archive_file" "upload_handler_lambda_zip" {
   output_path = "upload_handler_lambda.zip"
 }
 
-data "archive_file" "programmingAPI_zip" {
+data "archive_file" "programmingDataParser_zip" {
   type        = "zip"
   source_file = "../lambdas/programmingDataParser/programming_data_parser_lambda.py"
   output_path = "programming_data_parser_lambda.zip"
