@@ -44,6 +44,7 @@ dynamodb = boto3.resource("dynamodb")
 BRANCH_CODE_MAP = {
     "ALW": "Allegra Westbrooks Regional",
     "CAR": "Carmel",
+    "TEL": "Teen Loft",
     "CHS": "Charlotte",
     "COM": "Community",
     "COR": "Cornelius",
@@ -104,6 +105,7 @@ BRANCH_NAME_TO_CODE = {
     "south county": "SCR",
     "sugar": "SGC",
     "spangler": "SPA",
+    "teen loft": "TEL",
     "southpark": "SPK",
     "steele": "STC",
     "university": "UCR",
