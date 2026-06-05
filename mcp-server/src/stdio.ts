@@ -1,4 +1,6 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+dotenv.config({ path: ".env.local" });
+dotenv.config(); // fallback to .env if .env.local is absent
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer, logger } from "./server.js";
 
