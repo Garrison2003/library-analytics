@@ -236,10 +236,8 @@ resource "aws_api_gateway_deployment" "circulation" {
     aws_api_gateway_integration.options_upload,
     aws_api_gateway_integration.options_upload_validate,
     aws_api_gateway_integration.get_programming_history,
-    aws_api_gateway_integration_response.get_programming_history_200,
     aws_api_gateway_integration.options_programming_history,
     aws_api_gateway_integration.get_programming_compare,
-    aws_api_gateway_integration_response.get_programming_compare_200,
     aws_api_gateway_integration.options_programming_compare,
   ]
 }
@@ -459,36 +457,6 @@ resource "aws_api_gateway_integration" "get_programming_history" {
   uri                     = aws_lambda_function.programmingHistoryAPI.invoke_arn
 }
 
-# ── GET /programming/history Method Response (for CORS headers) ───────────────
-
-resource "aws_api_gateway_method_response" "get_programming_history_200" {
-  rest_api_id = aws_api_gateway_rest_api.circulation.id
-  resource_id = aws_api_gateway_resource.programming_history.id
-  http_method = aws_api_gateway_method.get_programming_history.http_method
-  status_code = "200"
-
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin" = true
-  }
-
-  response_models = {
-    "application/json" = "Empty"
-  }
-}
-
-resource "aws_api_gateway_integration_response" "get_programming_history_200" {
-  rest_api_id = aws_api_gateway_rest_api.circulation.id
-  resource_id = aws_api_gateway_resource.programming_history.id
-  http_method = aws_api_gateway_method.get_programming_history.http_method
-  status_code = aws_api_gateway_method_response.get_programming_history_200.status_code
-
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin" = "'${var.cors_origin}'"
-  }
-
-  depends_on = [aws_api_gateway_integration.get_programming_history]
-}
-
 # ── OPTIONS /programming/history (CORS Preflight) ────────────────────────────
 
 resource "aws_api_gateway_method" "options_programming_history" {
@@ -574,36 +542,6 @@ resource "aws_api_gateway_integration" "get_programming_compare" {
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri                     = aws_lambda_function.programmingHistoryAPI.invoke_arn
-}
-
-# ── GET /programming/compare Method Response (for CORS headers) ───────────────
-
-resource "aws_api_gateway_method_response" "get_programming_compare_200" {
-  rest_api_id = aws_api_gateway_rest_api.circulation.id
-  resource_id = aws_api_gateway_resource.programming_compare.id
-  http_method = aws_api_gateway_method.get_programming_compare.http_method
-  status_code = "200"
-
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin" = true
-  }
-
-  response_models = {
-    "application/json" = "Empty"
-  }
-}
-
-resource "aws_api_gateway_integration_response" "get_programming_compare_200" {
-  rest_api_id = aws_api_gateway_rest_api.circulation.id
-  resource_id = aws_api_gateway_resource.programming_compare.id
-  http_method = aws_api_gateway_method.get_programming_compare.http_method
-  status_code = aws_api_gateway_method_response.get_programming_compare_200.status_code
-
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin" = "'${var.cors_origin}'"
-  }
-
-  depends_on = [aws_api_gateway_integration.get_programming_compare]
 }
 
 # ── OPTIONS /programming/compare ─────────────────────────────────────────────
