@@ -102,4 +102,18 @@ describe("ProgrammingCharts Component", () => {
       expect(screen.getAllByText(/no current data/i).length).toBeGreaterThan(0),
     );
   });
+
+  it("does not throw when months field is absent (dataFound: false response)", async () => {
+    vi.mocked(apiClient.getProgrammingData).mockResolvedValueOnce({
+      success: true,
+      timestamp: new Date("2025-06-01T00:00:00Z"),
+      requestId: "req_test",
+      data: { branch: "SPA", branchName: "Spangler", dataFound: false },
+    });
+    // Should render without crashing — no "Failed to load" error
+    render(<ProgrammingCharts selectedBranch="Spangler" />);
+    await waitFor(() =>
+      expect(screen.queryByText(/failed to load/i)).not.toBeInTheDocument(),
+    );
+  });
 });
