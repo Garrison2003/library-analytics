@@ -124,8 +124,9 @@ class TestGetBranchHistory:
         assert result["branchName"] == "Imaginon"
 
     def test_data_list_contains_correct_fields(self):
+        # Use MAI (no departments) so one query returns exactly one item
         self.table.query.return_value = {"Items": [_dynamo_item(year_month="2024-07", attendance=1500, programs=67)]}
-        result = get_branch_history("IMG")
+        result = get_branch_history("MAI")
         record = result["data"][0]
         assert record["year_month"] == "2024-07"
         assert record["attendance"] == 1500
@@ -139,7 +140,7 @@ class TestGetBranchHistory:
             _dynamo_item(year_month="2024-08"),
         ]
         self.table.query.return_value = {"Items": items}
-        result = get_branch_history("IMG")
+        result = get_branch_history("MAI")
         months = [r["year_month"] for r in result["data"]]
         assert months == sorted(months, reverse=True)
 
@@ -149,32 +150,30 @@ class TestGetBranchHistory:
             _dynamo_item(year_month="2024-07", attendance=1000, programs=40),
         ]
         self.table.query.return_value = {"Items": items}
-        result = get_branch_history("IMG")
+        result = get_branch_history("MAI")
         assert result["metrics"]["totalAttendance"] == 3000
         assert result["metrics"]["totalPrograms"] == 120
         assert result["metrics"]["averageMonthlyAttendance"] == 1500
 
     def test_growth_percent_is_calculated(self):
-        # newest first after sort: 2024-08 (2000), 2024-07 (1000)
-        # oldest=1000, newest=2000 → 100% growth
         items = [
             _dynamo_item(year_month="2024-08", attendance=2000, programs=80),
             _dynamo_item(year_month="2024-07", attendance=1000, programs=40),
         ]
         self.table.query.return_value = {"Items": items}
-        result = get_branch_history("IMG")
+        result = get_branch_history("MAI")
         assert result["metrics"]["growthPercent"] == pytest.approx(100.0)
 
     def test_growth_is_none_with_single_data_point(self):
         self.table.query.return_value = {"Items": [_dynamo_item()]}
-        result = get_branch_history("IMG")
+        result = get_branch_history("MAI")
         assert result["metrics"]["growthPercent"] is None
 
-    def test_passes_limit_to_query(self):
+    def test_passes_limit_to_each_query(self):
         self.table.query.return_value = {"Items": []}
-        get_branch_history("IMG", months=6)
-        kwargs = self.table.query.call_args.kwargs
-        assert kwargs["Limit"] == 6
+        get_branch_history("MAI", months=6)
+        # MAI has no departments so only one query is made
+        assert self.table.query.call_args.kwargs["Limit"] == 6
 
     def test_returns_none_on_exception(self):
         self.table.query.side_effect = Exception("DynamoDB error")
@@ -243,6 +242,77 @@ class TestCompareBranches:
     def test_returns_none_on_exception(self):
         self.table.query.side_effect = Exception("error")
         assert compare_branches(["IMG"]) is None
+
+
+
+# ── TestGetBranchHistoryAggregation ──────────────────────────────────────────
+
+
+class TestGetBranchHistoryAggregation:
+    """
+    Imaginon (IMG) aggregates Spangler (SPA) and Teen Loft (TEL).
+    Each department uploads its own PDF independently; this suite verifies
+    that get_branch_history("IMG") combines all three sources correctly.
+    """
+
+    @pytest.fixture(autouse=True)
+    def setup(self, mock_dynamodb, monkeypatch):
+        monkeypatch.setenv("DYNAMODB_TABLE", "test-table")
+        self.table = _make_table(mock_dynamodb)
+
+    def test_queries_img_spa_and_tel(self):
+        self.table.query.return_value = {"Items": []}
+        get_branch_history("IMG")
+        called_codes = [
+            call.kwargs["ExpressionAttributeValues"][":code"]
+            for call in self.table.query.call_args_list
+        ]
+        assert set(called_codes) == {"IMG", "SPA", "TEL"}
+
+    def test_sums_attendance_across_departments(self):
+        # Spangler: 4389, Teen Loft: 500 for the same month → total 4889
+        self.table.query.side_effect = [
+            {"Items": []},   # IMG — no direct records
+            {"Items": [_dynamo_item(year_month="2026-04", attendance=4389, programs=69)]},   # SPA
+            {"Items": [_dynamo_item(year_month="2026-04", attendance=500, programs=15)]},    # TEL
+        ]
+        result = get_branch_history("IMG")
+        assert result["dataFound"] is True
+        assert result["attendance"][0] == 4889
+
+    def test_sums_programs_across_departments(self):
+        self.table.query.side_effect = [
+            {"Items": []},
+            {"Items": [_dynamo_item(year_month="2026-04", attendance=4389, programs=69)]},
+            {"Items": [_dynamo_item(year_month="2026-04", attendance=500, programs=15)]},
+        ]
+        result = get_branch_history("IMG")
+        assert result["programs"][0] == 84
+
+    def test_months_from_only_one_department_still_appear(self):
+        # Only SPA has data; TEL has none for this month
+        self.table.query.side_effect = [
+            {"Items": []},
+            {"Items": [_dynamo_item(year_month="2026-03", attendance=3000, programs=50)]},
+            {"Items": []},
+        ]
+        result = get_branch_history("IMG")
+        assert "2026-03" in result["months"]
+        assert result["attendance"][0] == 3000
+
+    def test_different_months_across_departments_are_both_included(self):
+        self.table.query.side_effect = [
+            {"Items": []},
+            {"Items": [_dynamo_item(year_month="2026-04", attendance=1000, programs=10)]},
+            {"Items": [_dynamo_item(year_month="2026-03", attendance=2000, programs=20)]},
+        ]
+        result = get_branch_history("IMG")
+        assert set(result["months"]) == {"2026-04", "2026-03"}
+
+    def test_branch_name_is_imaginon(self):
+        self.table.query.return_value = {"Items": [_dynamo_item()]}
+        result = get_branch_history("IMG")
+        assert result["branchName"] == "Imaginon"
 
 
 # ── TestLambdaHandler ─────────────────────────────────────────────────────────
