@@ -123,7 +123,7 @@ resource "aws_api_gateway_integration" "get_programming" {
   http_method             = aws_api_gateway_method.get_programming.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.programmingDataParser.invoke_arn
+  uri                     = aws_lambda_function.programmingHistoryAPI.invoke_arn
 }
 
 # ── OPTIONS /programming (CORS preflight) ───────────────────────────────────────
@@ -183,7 +183,7 @@ resource "aws_api_gateway_integration_response" "options_programming_200" {
 resource "aws_lambda_permission" "api_gateway_programming" {
   statement_id  = "AllowAPIGatewayInvokeProgramming"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.programmingDataParser.function_name
+  function_name = aws_lambda_function.programmingHistoryAPI.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.circulation.execution_arn}/*/*"
 }
