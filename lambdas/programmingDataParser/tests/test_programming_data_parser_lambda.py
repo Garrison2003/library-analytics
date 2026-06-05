@@ -13,15 +13,17 @@ from botocore.exceptions import ClientError
 from programming_data_parser_lambda import (
     _safe_int,
     _extract_branch_code,
+    _extract_branch_code_from_name,
     _get_branch_name,
     _date_to_year_month,
     _month_year_to_display,
     _find_data_sheet,
     parse_workbook,
+    parse_pdf_report,
     write_programming_data_to_dynamodb,
+    write_pdf_data_to_dynamodb,
     update_branch_metadata,
     handle_s3_event,
-    handle_api_request,
     lambda_handler,
 )
 
@@ -443,59 +445,200 @@ class TestHandleS3Event:
         assert mock_s3.put_object.called
 
 
-# ── TestHandleApiRequest ──────────────────────────────────────────────────────
+# ── TestExtractBranchCodeFromName ─────────────────────────────────────────────
 
 
-class TestHandleApiRequest:
-    @pytest.fixture(autouse=True)
-    def setup(self, monkeypatch):
-        monkeypatch.setenv("PROCESSED_BUCKET", "test-bucket")
+class TestExtractBranchCodeFromName:
+    def test_spangler_maps_to_spa(self):
+        assert _extract_branch_code_from_name("Spangler_In-House_Programs_April_2026.pdf") == "SPA"
 
-    def test_missing_bucket_env_returns_500(self, mock_s3, monkeypatch):
-        monkeypatch.delenv("PROCESSED_BUCKET", raising=False)
-        resp = handle_api_request(_api_event("IMG"))
-        assert resp["statusCode"] == 500
-        assert json.loads(resp["body"])["error"]["code"] == "CONFIG_ERROR"
+    def test_imaginon_maps_to_img(self):
+        assert _extract_branch_code_from_name("Imaginon_Outreach_Programs_March_2026.pdf") == "IMG"
 
-    def test_missing_branch_param_returns_400(self, mock_s3):
-        resp = handle_api_request({"queryStringParameters": {}})
-        assert resp["statusCode"] == 400
-        assert json.loads(resp["body"])["error"]["code"] == "MISSING_PARAMETER"
+    def test_allegra_westbrooks_maps_to_alw(self):
+        assert _extract_branch_code_from_name("Allegra_Westbrooks_In-House_2026.pdf") == "ALW"
 
-    def test_none_query_params_returns_400(self, mock_s3):
-        resp = handle_api_request({"queryStringParameters": None})
-        assert resp["statusCode"] == 400
+    def test_north_county_preferred_over_bare_north(self):
+        # "north county" is a longer key and must match before "north" alone
+        assert _extract_branch_code_from_name("North_County_Regional_Outreach_2026.pdf") == "NCR"
 
-    def test_returns_branch_data_on_success(self, mock_s3):
-        mock_s3.get_object.return_value = _s3_body(json.dumps(BRANCH_PAYLOAD).encode())
-        resp = handle_api_request(_api_event("IMG"))
-        assert resp["statusCode"] == 200
-        assert json.loads(resp["body"])["success"] is True
+    def test_case_insensitive(self):
+        assert _extract_branch_code_from_name("SPANGLER_IN-HOUSE.pdf") == "SPA"
 
-    def test_reads_correct_s3_key(self, mock_s3):
-        mock_s3.get_object.return_value = _s3_body(json.dumps(BRANCH_PAYLOAD).encode())
-        handle_api_request(_api_event("IMG"))
-        kwargs = mock_s3.get_object.call_args.kwargs
-        assert kwargs["Key"] == "processed/programming/IMG.json"
-        assert kwargs["Bucket"] == "test-bucket"
+    def test_returns_none_for_unknown_branch(self):
+        assert _extract_branch_code_from_name("Unknown_Branch_2026.pdf") is None
 
-    def test_uppercases_branch_code(self, mock_s3):
-        mock_s3.get_object.return_value = _s3_body(json.dumps(BRANCH_PAYLOAD).encode())
-        handle_api_request({"queryStringParameters": {"branch": "img"}})
-        assert mock_s3.get_object.call_args.kwargs["Key"] == "processed/programming/IMG.json"
 
-    def test_no_such_key_returns_200_with_data_found_false(self, mock_s3):
-        mock_s3.get_object.side_effect = ClientError(
-            {"Error": {"Code": "NoSuchKey", "Message": "Not Found"}}, "GetObject"
+# ── TestParsePdfReport ────────────────────────────────────────────────────────
+
+PDF_TEXT_IN_HOUSE = (
+    "JM Spangler In-House Programs\n"
+    "Primary Facilitator  Program Name  Date\n"
+    "Grand Summary: 69 4389\n"
+    "Filter Criteria Applied:\n"
+    "Program Date: Apr 2026(Included)\n"
+)
+
+PDF_TEXT_OUTREACH = (
+    "JM Spangler Outreach Programs\n"
+    "Primary Facilitator  Outreach Site  Program Name  Date\n"
+    "Grand Summary: 23 529\n"
+    "Filter Criteria Applied:\n"
+    "Program Date: Apr 2026(Included)\n"
+)
+
+
+def _mock_pdf(text: str, table_rows=None):
+    """
+    Build a minimal pdfplumber mock.
+
+    pdfplumber.extract_tables() returns list[table] where each table is list[row]
+    and each row is list[cell]. Supply table_rows as a single row (list of cells)
+    and this wraps it in the correct [[row]] structure.
+    """
+    page = MagicMock()
+    page.extract_text.return_value = text
+    # [[table_rows]] = one table containing one row
+    page.extract_tables.return_value = [[table_rows]] if table_rows else []
+    pdf = MagicMock()
+    pdf.__enter__ = MagicMock(return_value=pdf)
+    pdf.__exit__ = MagicMock(return_value=False)
+    pdf.pages = [page]
+    return pdf
+
+
+class TestParsePdfReport:
+    def test_extracts_year_month_from_filter_line(self):
+        with patch("programming_data_parser_lambda.pdfplumber.open", return_value=_mock_pdf(PDF_TEXT_IN_HOUSE)):
+            result = parse_pdf_report(b"fake")
+        assert result["year_month"] == "2026-04"
+
+    def test_detects_in_house_report(self):
+        with patch("programming_data_parser_lambda.pdfplumber.open", return_value=_mock_pdf(PDF_TEXT_IN_HOUSE)):
+            result = parse_pdf_report(b"fake")
+        assert result["is_outreach"] is False
+
+    def test_detects_outreach_report(self):
+        with patch("programming_data_parser_lambda.pdfplumber.open", return_value=_mock_pdf(PDF_TEXT_OUTREACH)):
+            result = parse_pdf_report(b"fake")
+        assert result["is_outreach"] is True
+
+    def test_extracts_programs_from_text_fallback(self):
+        with patch("programming_data_parser_lambda.pdfplumber.open", return_value=_mock_pdf(PDF_TEXT_IN_HOUSE)):
+            result = parse_pdf_report(b"fake")
+        assert result["programs"] == 69
+
+    def test_extracts_attendance_from_text_fallback(self):
+        with patch("programming_data_parser_lambda.pdfplumber.open", return_value=_mock_pdf(PDF_TEXT_IN_HOUSE)):
+            result = parse_pdf_report(b"fake")
+        assert result["attendance"] == 4389
+
+    def test_extracts_from_table_row_when_present(self):
+        table_row = ["Grand Summary:", "", "69", "4389"]
+        mock_pdf = _mock_pdf(
+            "JM Spangler In-House Programs\nProgram Date: Apr 2026(Included)\n",
+            table_rows=table_row,
         )
-        resp = handle_api_request(_api_event("XYZ"))
-        assert resp["statusCode"] == 200
-        assert json.loads(resp["body"])["data"]["dataFound"] is False
+        with patch("programming_data_parser_lambda.pdfplumber.open", return_value=mock_pdf):
+            result = parse_pdf_report(b"fake")
+        assert result["programs"] == 69
+        assert result["attendance"] == 4389
 
-    def test_response_has_cors_headers(self, mock_s3):
-        mock_s3.get_object.return_value = _s3_body(json.dumps(BRANCH_PAYLOAD).encode())
-        resp = handle_api_request(_api_event("IMG"))
-        assert resp["headers"]["Access-Control-Allow-Origin"] == "*"
+    def test_returns_none_when_month_not_found(self):
+        text = "JM Spangler In-House Programs\nGrand Summary: 10 100\n"
+        with patch("programming_data_parser_lambda.pdfplumber.open", return_value=_mock_pdf(text)):
+            result = parse_pdf_report(b"fake")
+        assert result is None
+
+    def test_returns_none_on_exception(self):
+        with patch("programming_data_parser_lambda.pdfplumber.open", side_effect=Exception("parse error")):
+            result = parse_pdf_report(b"fake")
+        assert result is None
+
+
+# ── TestWritePdfDataToDynamoDB ────────────────────────────────────────────────
+
+
+class TestWritePdfDataToDynamoDB:
+    @pytest.fixture(autouse=True)
+    def setup(self, mock_dynamodb, monkeypatch):
+        monkeypatch.setenv("DYNAMODB_TABLE", "test-table")
+        monkeypatch.setenv("DYNAMODB_METADATA_TABLE", "test-meta-table")
+        self.table, _ = _mock_table(mock_dynamodb)
+
+    def _in_house_data(self):
+        return {"year_month": "2026-04", "programs": 69, "attendance": 4389, "is_outreach": False}
+
+    def _outreach_data(self):
+        return {"year_month": "2026-04", "programs": 23, "attendance": 529, "is_outreach": True}
+
+    def test_returns_true_on_success(self):
+        assert write_pdf_data_to_dynamodb("SPA", "Spangler", self._in_house_data(), "test.pdf") is True
+
+    def test_in_house_sets_attendance_and_programs(self):
+        write_pdf_data_to_dynamodb("SPA", "Spangler", self._in_house_data(), "test.pdf")
+        # call_args_list[0] is the data write; call_args_list[1] is update_branch_metadata
+        kwargs = self.table.update_item.call_args_list[0].kwargs
+        assert ":a" in kwargs["ExpressionAttributeValues"]
+        assert kwargs["ExpressionAttributeValues"][":a"] == 4389
+        assert kwargs["ExpressionAttributeValues"][":p"] == 69
+
+    def test_outreach_sets_outreach_fields(self):
+        write_pdf_data_to_dynamodb("SPA", "Spangler", self._outreach_data(), "outreach.pdf")
+        kwargs = self.table.update_item.call_args_list[0].kwargs
+        expr = kwargs["UpdateExpression"]
+        assert "outreach_attendance" in expr
+        assert "outreach_programs" in expr
+
+    def test_uses_update_item_not_put_item(self):
+        write_pdf_data_to_dynamodb("SPA", "Spangler", self._in_house_data(), "test.pdf")
+        assert self.table.update_item.called
+        assert not self.table.put_item.called
+
+    def test_key_contains_branch_code_and_year_month(self):
+        write_pdf_data_to_dynamodb("SPA", "Spangler", self._in_house_data(), "test.pdf")
+        key = self.table.update_item.call_args_list[0].kwargs["Key"]
+        assert key == {"branch_code": "SPA", "year_month": "2026-04"}
+
+    def test_returns_false_on_exception(self):
+        self.table.update_item.side_effect = Exception("DynamoDB error")
+        result = write_pdf_data_to_dynamodb("SPA", "Spangler", self._in_house_data(), "test.pdf")
+        assert result is False
+
+
+# ── TestHandleS3Event (PDF path) ──────────────────────────────────────────────
+
+
+class TestHandleS3EventPdf:
+    @pytest.fixture(autouse=True)
+    def setup(self, mock_s3, mock_dynamodb, monkeypatch):
+        monkeypatch.setenv("PROCESSED_BUCKET", "proc-bucket")
+        monkeypatch.setenv("DYNAMODB_TABLE", "test-table")
+        monkeypatch.setenv("DYNAMODB_METADATA_TABLE", "test-meta-table")
+        mock_s3.get_object.return_value = _s3_body(b"fake pdf bytes")
+        _mock_table(mock_dynamodb)
+
+    PDF_DATA = {"year_month": "2026-04", "programs": 69, "attendance": 4389, "is_outreach": False}
+
+    def test_pdf_returns_200(self):
+        with patch("programming_data_parser_lambda.parse_pdf_report", return_value=self.PDF_DATA):
+            resp = handle_s3_event(_s3_event("bucket", "uploads/programming/Spangler_In-House_Programs_April_2026.pdf"))
+        assert resp["statusCode"] == 200
+
+    def test_pdf_response_contains_year_month(self):
+        with patch("programming_data_parser_lambda.parse_pdf_report", return_value=self.PDF_DATA):
+            resp = handle_s3_event(_s3_event("bucket", "uploads/programming/Spangler_In-House_Programs_April_2026.pdf"))
+        body = json.loads(resp["body"])
+        assert body["yearMonth"] == "2026-04"
+
+    def test_pdf_unknown_branch_returns_400(self):
+        resp = handle_s3_event(_s3_event("bucket", "uploads/programming/Unknown_In-House_2026.pdf"))
+        assert resp["statusCode"] == 400
+
+    def test_pdf_parse_failure_returns_400(self):
+        with patch("programming_data_parser_lambda.parse_pdf_report", return_value=None):
+            resp = handle_s3_event(_s3_event("bucket", "uploads/programming/Spangler_In-House_2026.pdf"))
+        assert resp["statusCode"] == 400
 
 
 # ── TestLambdaHandler ─────────────────────────────────────────────────────────
@@ -509,14 +652,16 @@ class TestLambdaHandler:
         monkeypatch.setenv("DYNAMODB_METADATA_TABLE", "test-meta-table")
         _mock_table(mock_dynamodb)
 
-    def test_routes_records_event_to_s3_handler(self, mock_s3):
+    def test_routes_s3_xlsx_event(self, mock_s3):
         mock_s3.get_object.return_value = _s3_body(b"fake xlsx")
         mock_s3.put_object.return_value = {}
         with patch("programming_data_parser_lambda.parse_workbook", return_value=PARSED_DATA):
             resp = lambda_handler(_s3_event("bucket", "uploads/programming/IMG Monthly.xlsx"), None)
         assert resp["statusCode"] == 200
 
-    def test_routes_api_event_to_api_handler(self, mock_s3):
-        mock_s3.get_object.return_value = _s3_body(json.dumps(BRANCH_PAYLOAD).encode())
-        resp = lambda_handler(_api_event("IMG"), None)
+    def test_routes_s3_pdf_event(self, mock_s3):
+        mock_s3.get_object.return_value = _s3_body(b"fake pdf")
+        pdf_data = {"year_month": "2026-04", "programs": 69, "attendance": 4389, "is_outreach": False}
+        with patch("programming_data_parser_lambda.parse_pdf_report", return_value=pdf_data):
+            resp = lambda_handler(_s3_event("bucket", "uploads/programming/Spangler_In-House_2026.pdf"), None)
         assert resp["statusCode"] == 200

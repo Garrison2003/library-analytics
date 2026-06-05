@@ -1,5 +1,6 @@
 // src/components/ProgrammingCharts.tsx
 import React, { useEffect, useState } from "react";
+import { apiClient } from "../services/api";
 
 /**
  * ProgrammingCharts Component
@@ -144,17 +145,41 @@ const BarChart: React.FC<BarChartProps> = ({
   );
 };
 
-// Mirrors BRANCH_CODE_MAP in programming_lambda.py
+// Mirrors BRANCH_CODE_MAP in programming lambdas
 const BRANCH_NAME_TO_CODE: Record<string, string> = {
-  Imaginon: "IMG",
-  Main: "MAI",
-  "Plaza Midwood": "PLZ",
-  Northlake: "NOR",
-  Charlotte: "CHS",
-  Spangler: "SPA",
+  "Allegra Westbrooks Regional": "ALW",
   Carmel: "CAR",
+  Charlotte: "CHS",
   Community: "COM",
+  Cornelius: "COR",
+  Davidson: "DAV",
   East: "EAS",
+  "Hickory Grove": "HCG",
+  Imaginon: "IMG",
+  "Independence Regional": "INR",
+  "Library Admin Center": "LAC",
+  Main: "MAI",
+  "Main - Founders Hall": "MAI",
+  "Main Founders Hall": "MAI",
+  Matthews: "MAT",
+  "Mint Hill": "MNH",
+  "Mobile Library": "MOB",
+  "Mountain Island": "MTI",
+  "Myers Park": "MYP",
+  "North County Regional": "NCR",
+  Northlake: "NOR",
+  Pineville: "PIN",
+  "Plaza Midwood": "PLZ",
+  "Plaza-Midwood": "PLZ",
+  "South Boulevard": "SBL",
+  "South County Regional": "SCR",
+  "Sugar Creek": "SGC",
+  Spangler: "SPA",
+  "SouthPark Regional": "SPK",
+  "SouthPark Regional Library": "SPK",
+  "Steele Creek": "STC",
+  "University City Regional": "UCR",
+  "West Boulevard": "WBL",
   West: "WES",
 };
 
@@ -201,28 +226,24 @@ const ProgrammingCharts: React.FC<ProgrammingChartsProps> = ({
       setError(null);
 
       try {
-        const apiUrl = import.meta.env.VITE_API_URL;
-        if (!apiUrl) {
-          setError("API URL not configured");
+        const branchCode = BRANCH_NAME_TO_CODE[selectedBranch];
+        if (!branchCode) {
+          setData(null);
           setLoading(false);
           return;
         }
 
-        // Extract 3-letter branch code (e.g., "Imaginon" → "IMG")
-        // For now, we'll pass the branch as-is; the backend expects the code
-        const branchCode = BRANCH_NAME_TO_CODE[selectedBranch] ?? selectedBranch;
+        const json = await apiClient.getProgrammingData(branchCode);
 
-        const response = await fetch(
-          `${apiUrl}/programming?branch=${encodeURIComponent(branchCode)}`,
-        );
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const json = await response.json();
         if (json.success && json.data) {
-          setData(json.data);
+          const raw = json.data;
+          // Format "2025-07" → "Jul 25" for chart labels
+          const formattedMonths = (raw.months as string[]).map((ym) => {
+            const [year, month] = ym.split("-");
+            const date = new Date(Number(year), Number(month) - 1, 1);
+            return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+          });
+          setData({ ...raw, months: formattedMonths });
         } else {
           setError(json.error?.message || "Failed to fetch data");
         }

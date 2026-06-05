@@ -78,11 +78,9 @@ class APIService {
   /**
    * Get programming statistics for a specific branch
    */
-  async getProgrammingData(branch: string): Promise<APIResponse<any>> {
-    const params = new URLSearchParams();
-    if (branch) params.append("branch", branch);
-
-    return this.request<any>(`/programming?${params.toString()}`);
+  async getProgrammingData(branch: string, months: number = 12): Promise<APIResponse<any>> {
+    const params = new URLSearchParams({ branch, months: String(months) });
+    return this.request<any>(`/programming/history?${params.toString()}`);
   }
 
   /**

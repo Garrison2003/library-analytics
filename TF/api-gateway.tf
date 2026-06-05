@@ -123,7 +123,7 @@ resource "aws_api_gateway_integration" "get_programming" {
   http_method             = aws_api_gateway_method.get_programming.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.programmingAPI.invoke_arn
+  uri                     = aws_lambda_function.programmingDataParser.invoke_arn
 }
 
 # ── OPTIONS /programming (CORS preflight) ───────────────────────────────────────
@@ -183,7 +183,7 @@ resource "aws_api_gateway_integration_response" "options_programming_200" {
 resource "aws_lambda_permission" "api_gateway_programming" {
   statement_id  = "AllowAPIGatewayInvokeProgramming"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.programmingAPI.function_name
+  function_name = aws_lambda_function.programmingDataParser.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.circulation.execution_arn}/*/*"
 }
@@ -442,11 +442,11 @@ resource "aws_api_gateway_method" "get_programming_history" {
 
   request_parameters = {
     "method.request.querystring.branch" = true
-    "method.request.querystring.months" = false  # Optional, defaults to 12
+    "method.request.querystring.months" = false # Optional, defaults to 12
   }
 }
 
-# ── Integration: API Gateway → programmingDataParser Lambda ──────────────────
+# ── Integration: API Gateway → programmingHistoryAPI Lambda ──────────────────
 
 resource "aws_api_gateway_integration" "get_programming_history" {
   rest_api_id             = aws_api_gateway_rest_api.circulation.id
@@ -454,7 +454,7 @@ resource "aws_api_gateway_integration" "get_programming_history" {
   http_method             = aws_api_gateway_method.get_programming_history.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.programmingDataParser.invoke_arn
+  uri                     = aws_lambda_function.programmingHistoryAPI.invoke_arn
 }
 
 # ── OPTIONS /programming/history (CORS Preflight) ────────────────────────────
@@ -510,7 +510,7 @@ resource "aws_api_gateway_integration_response" "options_programming_history_200
 resource "aws_lambda_permission" "api_gateway_programming_history" {
   statement_id  = "AllowAPIGatewayInvokeProgrammingHistory"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.programmingDataParser.function_name
+  function_name = aws_lambda_function.programmingHistoryAPI.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.circulation.execution_arn}/*/*"
 }
@@ -541,7 +541,7 @@ resource "aws_api_gateway_integration" "get_programming_compare" {
   http_method             = aws_api_gateway_method.get_programming_compare.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.programmingDataParser.invoke_arn
+  uri                     = aws_lambda_function.programmingHistoryAPI.invoke_arn
 }
 
 # ── OPTIONS /programming/compare ─────────────────────────────────────────────

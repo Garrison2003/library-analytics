@@ -3,11 +3,11 @@
 # ── Main Programming Data Table ──────────────────────────────────────────────
 
 resource "aws_dynamodb_table" "programming_data" {
-  name           = "${var.project_name}-programming-data-${var.environment}"
-  billing_mode   = var.dynamodb_billing_mode # "PAY_PER_REQUEST" or "PROVISIONED"
-  hash_key       = "branch_code"
-  range_key      = "year_month"
-  
+  name         = "${var.project_name}-programming-data-${var.environment}"
+  billing_mode = var.dynamodb_billing_mode # "PAY_PER_REQUEST" or "PROVISIONED"
+  hash_key     = "branch_code"
+  range_key    = "year_month"
+
   # Provisioned capacity (only used if billing_mode = "PROVISIONED")
   read_capacity  = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_read_capacity : null
   write_capacity = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_write_capacity : null
@@ -15,13 +15,13 @@ resource "aws_dynamodb_table" "programming_data" {
   # Partition Key: branch_code (e.g., "IMG", "MAI")
   attribute {
     name = "branch_code"
-    type = "S"  # String
+    type = "S" # String
   }
 
   # Sort Key: year_month (e.g., "2026-05" for May 2026)
   attribute {
     name = "year_month"
-    type = "S"  # String
+    type = "S" # String
   }
 
   # GSI Partition Key: year_month (for "get all branches in a month" queries)
@@ -36,8 +36,8 @@ resource "aws_dynamodb_table" "programming_data" {
     name            = "DateIndex"
     hash_key        = "year_month_gsi"
     range_key       = "branch_code"
-    projection_type = "ALL"  # Project all attributes (needed for comparisons)
-    
+    projection_type = "ALL" # Project all attributes (needed for comparisons)
+
     read_capacity  = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_gsi_read_capacity : null
     write_capacity = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_gsi_write_capacity : null
   }
@@ -68,9 +68,9 @@ resource "aws_dynamodb_table" "programming_data" {
 # ── Branch Metadata Table ────────────────────────────────────────────────────
 
 resource "aws_dynamodb_table" "branch_metadata" {
-  name           = "${var.project_name}-branch-metadata-${var.environment}"
-  billing_mode   = var.dynamodb_billing_mode
-  hash_key       = "branch_code"
+  name         = "${var.project_name}-branch-metadata-${var.environment}"
+  billing_mode = var.dynamodb_billing_mode
+  hash_key     = "branch_code"
 
   read_capacity  = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_metadata_read_capacity : null
   write_capacity = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_metadata_write_capacity : null

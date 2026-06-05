@@ -43,9 +43,10 @@ FILE_TYPE_CONFIG = {
     "programs": {
         "id": "programs",
         "displayName": "Program Statistics",
-        "allowedExtensions": ["xlsx"],
+        "allowedExtensions": ["xlsx", "pdf"],
         "acceptedMimeTypes": [
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/pdf",
         ],
         "maxSizeBytes": 20 * 1024 * 1024,  # 20 MB
         "s3Destination": "uploads/programming",
