@@ -57,22 +57,22 @@ describe("APIService", () => {
   // ── getProgrammingData ─────────────────────────────────────────────────────
 
   describe("getProgrammingData", () => {
-    it("calls /programming with the branch query param", async () => {
+    it("calls /programming/history with branch and default months=12", async () => {
       mockFetch({ data: {} });
       await api.getProgrammingData("IMG");
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/programming?branch=IMG"),
+        expect.stringContaining("/programming/history?branch=IMG&months=12"),
         expect.any(Object),
       );
     });
 
-    it("omits branch param when the branch string is empty", async () => {
+    it("passes a custom months parameter", async () => {
       mockFetch({ data: {} });
-      await api.getProgrammingData("");
-      const url = (global.fetch as ReturnType<typeof vi.fn>).mock
-        .calls[0][0] as string;
-      expect(url).toContain("/programming");
-      expect(url).not.toContain("branch=");
+      await api.getProgrammingData("SPA", 6);
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("months=6"),
+        expect.any(Object),
+      );
     });
 
     it("returns the parsed JSON response", async () => {
