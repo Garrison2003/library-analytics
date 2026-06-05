@@ -154,11 +154,10 @@ class TestValidateFile:
         assert ok is True
         assert msg == ""
 
-    def test_pdf_rejected_for_programs(self):
-        ok, msg, details = validate_file("report.pdf", 1024, PDF_MIME, "programs")
-        assert ok is False
-        assert ".pdf" in msg
-        assert "xlsx" in details.get("expectedExtensions", [])
+    def test_pdf_accepted_for_programs(self):
+        ok, msg, _ = validate_file("report.pdf", 1024, PDF_MIME, "programs")
+        assert ok is True
+        assert msg == ""
 
     def test_unsupported_file_type_returns_false(self):
         ok, msg, details = validate_file("data.xlsm", 1024, XLSM_MIME, "invoices")
@@ -399,10 +398,10 @@ class TestHandleUpload:
         kwargs = mock_s3.put_object.call_args.kwargs
         assert kwargs["Key"] == "uploads/programming/data.xlsx"
 
-    def test_pdf_rejected_for_programs_type(self, bucket):
+    def test_pdf_accepted_for_programs_type(self, bucket, mock_s3):
         resp = handle_upload(_upload_event("report.pdf", b"%PDF-1.4", PDF_MIME, "programs"))
-        assert resp["statusCode"] == 400
-        assert json.loads(resp["body"])["error"]["code"] == "INVALID_FILE"
+        assert resp["statusCode"] == 200
+        assert mock_s3.put_object.call_args.kwargs["Key"] == "uploads/programming/report.pdf"
 
     def test_response_has_timestamp_and_request_id(self, bucket):
         resp = handle_upload(_upload_event("data.xlsm", XLSM_BYTES, XLSM_MIME))
