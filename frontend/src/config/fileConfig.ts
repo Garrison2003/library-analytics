@@ -70,16 +70,17 @@ export const FILE_CONFIGURATIONS: FileTypeConfigMap = {
     id: "programs",
     displayName: "Program Statistics",
     description:
-      "Excel workbook containing monthly program attendance and activity data by branch",
-    allowedExtensions: ["xlsx"],
+      "Excel workbook or ILS PDF report containing monthly program attendance and activity data by branch",
+    allowedExtensions: ["xlsx", "pdf"],
     acceptedMimeTypes: [
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/pdf",
     ],
     maxSizeBytes: 20 * 1024 * 1024, // 20 MB
     s3Destination: "uploads/programming",
     validate: validateProgramFile,
     helpText:
-      "Upload program statistics in Excel format. File should contain monthly attendance data and be named with the 3-letter department code (e.g., IMG Monthly Stats FY26-28).",
+      "Upload program statistics as an Excel file (e.g., IMG Monthly Stats FY26-28.xlsx) or an ILS In-House/Outreach PDF report (e.g., Spangler_In-House_Programs_April_2026.pdf).",
   },
 
   // Future file types can be added here
@@ -133,26 +134,14 @@ async function validateCirculationFile(file: File): Promise<ValidationResult> {
  * Validation function for program statistics files
  * Checks that the file is a valid Excel spreadsheet
  */
+const KNOWN_BRANCH_NAMES = [
+  "imaginon", "main", "plaza", "northlake", "charlotte",
+  "spangler", "carmel", "community", "east", "west",
+];
+
 async function validateProgramFile(file: File): Promise<ValidationResult> {
-  // Check file extension
   const extension = getFileExtension(file.name);
-  if (extension !== "xlsx") {
-    return {
-      valid: false,
-      error: `Invalid file format. Expected .xlsx, got .${extension}`,
-    };
-  }
 
-  // Check MIME type
-  if (!file.type.includes("spreadsheetml")) {
-    return {
-      valid: false,
-      error:
-        "File does not appear to be a valid Excel file. Please ensure you're uploading a .xlsx file.",
-    };
-  }
-
-  // Check file size
   if (file.size > FILE_CONFIGURATIONS.programs.maxSizeBytes) {
     return {
       valid: false,
@@ -160,22 +149,55 @@ async function validateProgramFile(file: File): Promise<ValidationResult> {
     };
   }
 
-  // Check filename contains 3-letter code (e.g., IMG Montly Stats...)
-  const filename = file.name;
-  const codeMatch = filename.match(/^([A-Z]{3})\s+/);
+  // ── PDF: ILS In-House or Outreach report ──────────────────────────────────
+  if (extension === "pdf") {
+    if (!file.type.includes("pdf")) {
+      return { valid: false, error: "File does not appear to be a valid PDF." };
+    }
+    const nameLower = file.name.toLowerCase();
+    const hasBranch = KNOWN_BRANCH_NAMES.some((b) => nameLower.includes(b));
+    const hasReportType =
+      nameLower.includes("in-house") || nameLower.includes("outreach");
+    if (!hasBranch || !hasReportType) {
+      return {
+        valid: false,
+        error:
+          "PDF filename should include a branch name and report type (e.g., Spangler_In-House_Programs_April_2026.pdf).",
+      };
+    }
+    return {
+      valid: true,
+      warnings: ["PDF will be parsed on the server for Grand Summary totals."],
+    };
+  }
+
+  // ── Excel: monthly stats workbook ─────────────────────────────────────────
+  if (extension !== "xlsx") {
+    return {
+      valid: false,
+      error: `Invalid file format. Expected .xlsx or .pdf, got .${extension}`,
+    };
+  }
+
+  if (!file.type.includes("spreadsheetml")) {
+    return {
+      valid: false,
+      error: "File does not appear to be a valid Excel file.",
+    };
+  }
+
+  const codeMatch = file.name.match(/^([A-Z]{3})\s+/);
   if (!codeMatch) {
     return {
       valid: false,
       error:
-        "Invalid filename format. File should start with a 3-letter department code (e.g., IMG Monthly Stats FY26-28).",
+        "Excel filename should start with a 3-letter branch code (e.g., IMG Monthly Stats FY26-28.xlsx).",
     };
   }
 
   return {
     valid: true,
-    warnings: [
-      "File will be validated on the server for correct data structure.",
-    ],
+    warnings: ["File will be validated on the server for correct data structure."],
   };
 }
 
