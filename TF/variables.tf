@@ -152,3 +152,15 @@ variable "create_dynamodb_api_role" {
   type        = bool
   default     = false
 }
+
+# ── Auth0 ────────────────────────────────────────────────────────────────────
+
+variable "auth0_domain" {
+  description = "Auth0 tenant domain (e.g. your-tenant.us.auth0.com)"
+  type        = string
+}
+
+variable "auth0_audience" {
+  description = "Auth0 API audience identifier (must match VITE_AUTH0_AUDIENCE)"
+  type        = string
+}
