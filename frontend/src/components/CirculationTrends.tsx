@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import type { CirculationDataPoint } from "../types/index";
+import { apiClient } from "../services/api";
 
 /**
  * CirculationTrends Component (with Branch Support)
@@ -440,25 +441,8 @@ const CirculationTrends: React.FC<CirculationTrendsProps> = ({
       setIsLoading(true);
       setError(null);
       try {
-        const apiUrl = import.meta.env.VITE_API_URL;
-        if (!apiUrl) {
-          throw new Error("API URL not configured");
-        }
-
-        const params = new URLSearchParams();
-        if (selectedBranch && selectedBranch !== "System") {
-          params.append("branch", selectedBranch);
-        }
-
-        const response = await fetch(
-          `${apiUrl}/circulation?${params.toString()}`,
-        );
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const json = await response.json();
+        const branch = selectedBranch && selectedBranch !== "System" ? selectedBranch : undefined;
+        const json = await apiClient.getCirculationData(branch);
         if (json.success && json.data?.data) {
           setAllData(json.data.data);
         } else {

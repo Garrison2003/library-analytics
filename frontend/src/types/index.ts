@@ -24,6 +24,8 @@ export interface CirculationData {
   data: CirculationDataPoint[];
   lastUpdated: Date;
   totalRecords: number;
+  branches?: string[];
+  selectedBranch?: string;
 }
 
 /**

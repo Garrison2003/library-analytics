@@ -1,6 +1,7 @@
 // src/pages/Homepage.tsx (UPDATED - Default First Branch + Better Layout)
 
 import React, { useEffect, useState } from "react";
+import { apiClient } from "../services/api";
 import BranchSelector from "../components/BranchSelector";
 import CirculationTrends from "../components/CirculationTrends";
 import ProgrammingCharts from "../components/ProgrammingCharts";
@@ -26,26 +27,13 @@ const Homepage: React.FC = () => {
   useEffect(() => {
     const fetchBranches = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL;
-        if (!apiUrl) {
-          console.warn("API URL not configured");
-          setIsLoadingBranches(false);
-          return;
-        }
-
-        const response = await fetch(`${apiUrl}/circulation`);
-        if (response.ok) {
-          const json = await response.json();
-          if (json.success && json.data?.branches) {
-            const branchList = json.data.branches;
-            setBranches(branchList);
-            // Default to first branch in the list (not "System")
-            if (branchList.length > 0) {
-              setSelectedBranch(branchList[0]);
-            } else {
-              setSelectedBranch("System");
-            }
-          }
+        const json = await apiClient.getCirculationData();
+        if (json.success && json.data?.branches) {
+          const branchList = json.data.branches;
+          setBranches(branchList);
+          setSelectedBranch(branchList.length > 0 ? branchList[0] : "System");
+        } else {
+          setSelectedBranch("System");
         }
       } catch (error) {
         console.error("Error fetching branches:", error);

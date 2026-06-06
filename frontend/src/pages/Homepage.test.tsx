@@ -31,37 +31,47 @@ vi.mock("../components/BranchSelector", () => ({
   ),
 }));
 
+vi.mock("../services/api", () => ({
+  apiClient: {
+    getCirculationData: vi.fn(),
+  },
+}));
+
+import { apiClient } from "../services/api";
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function mockFetchBranches(branches: string[]) {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        success: true,
-        data: { branches, data: [], selectedBranch: "System" },
-      }),
-    }),
-  );
+  vi.mocked(apiClient.getCirculationData).mockResolvedValue({
+    success: true,
+    data: {
+      branches,
+      data: [],
+      selectedBranch: "System",
+      lastUpdated: new Date(),
+      totalRecords: 0,
+    },
+    timestamp: new Date(),
+    requestId: "test",
+  });
 }
 
 function mockFetchFail() {
-  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
+  vi.mocked(apiClient.getCirculationData).mockRejectedValue(
+    new Error("Network error"),
+  );
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("Homepage Component", () => {
   beforeEach(() => {
-    vi.stubEnv("VITE_API_URL", "http://test-api.com");
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
   afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.unstubAllGlobals();
+    vi.clearAllMocks();
     vi.restoreAllMocks();
   });
 
@@ -121,7 +131,9 @@ describe("Homepage Component", () => {
   // ── Branch fetching ────────────────────────────────────────────────────────
 
   it("shows loading state for branch selector on mount", () => {
-    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => {})));
+    vi.mocked(apiClient.getCirculationData).mockReturnValue(
+      new Promise(() => {}),
+    );
     render(<Homepage />);
     expect(screen.getByTestId("branch-loading")).toBeInTheDocument();
   });
@@ -130,9 +142,7 @@ describe("Homepage Component", () => {
     mockFetchBranches(["Imaginon", "Main", "Plaza Midwood"]);
     render(<Homepage />);
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/circulation"),
-      );
+      expect(apiClient.getCirculationData).toHaveBeenCalled();
     });
   });
 
@@ -170,14 +180,12 @@ describe("Homepage Component", () => {
     );
   });
 
-  it("skips fetch and does not crash when VITE_API_URL is not set", async () => {
-    vi.stubEnv("VITE_API_URL", "");
-    vi.stubGlobal("fetch", vi.fn());
+  it("resolves loading state even when API call fails", async () => {
+    mockFetchFail();
     render(<Homepage />);
     await waitFor(() =>
       expect(screen.queryByTestId("branch-loading")).not.toBeInTheDocument(),
     );
-    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it("passes selectedBranch to CirculationTrends", async () => {

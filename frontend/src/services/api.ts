@@ -70,10 +70,10 @@ class APIService {
   }
 
   async getCirculationData(
-    category?: string,
+    branch?: string,
   ): Promise<APIResponse<CirculationData>> {
     const params = new URLSearchParams();
-    if (category) params.append("category", category);
+    if (branch) params.append("branch", branch);
     return this.request<CirculationData>(`/circulation?${params.toString()}`);
   }
 

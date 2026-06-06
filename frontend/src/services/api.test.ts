@@ -36,21 +36,21 @@ describe("APIService", () => {
       );
     });
 
-    it("appends the category query param when provided", async () => {
+    it("appends the branch query param when provided", async () => {
       mockFetch({ data: [] });
       await api.getCirculationData("Juvenile Fiction");
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("category=Juvenile+Fiction"),
+        expect.stringContaining("branch=Juvenile+Fiction"),
         expect.any(Object),
       );
     });
 
-    it("omits category param when not provided", async () => {
+    it("omits branch param when not provided", async () => {
       mockFetch({ data: [] });
       await api.getCirculationData();
       const url = (global.fetch as ReturnType<typeof vi.fn>).mock
         .calls[0][0] as string;
-      expect(url).not.toContain("category=");
+      expect(url).not.toContain("branch=");
     });
   });
 
