@@ -508,7 +508,7 @@ resource "aws_api_gateway_integration_response" "options_programming_history_200
 # ── Lambda Permissions ───────────────────────────────────────────────────────
 
 resource "aws_lambda_permission" "api_gateway_programming_history" {
-  statement_id  = "AllowAPIGatewayInvokeProgrammingHistory"
+  statement_id  = "AllowAPIGatewayInvokeProgrammingHistory2"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.programmingHistoryAPI.function_name
   principal     = "apigateway.amazonaws.com"
