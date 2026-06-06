@@ -148,6 +148,14 @@ jobs:
           zip -j TF/programming_history_api_lambda.zip \
             lambdas/programmingHistoryAPI/programming_history_api_lambda.py
 
+      - name: Build MCP Server Lambda
+        run: |
+          cd mcp-server
+          npm ci
+          npm run build
+          npm prune --omit=dev
+          zip -r ../TF/mcp_server_lambda.zip dist/ node_modules/ package.json
+
       - name: Build API Authorizer Lambda
         run: |
           mkdir -p lambdas/apiAuthorizer/package

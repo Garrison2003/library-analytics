@@ -12,6 +12,7 @@ import {
   ScanCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { pino } from "pino";
+import { randomUUID } from "node:crypto";
 
 // Log to stderr so stdout remains clean for stdio MCP transport
 export const logger = pino({ level: process.env.LOG_LEVEL || "info" }, process.stderr);
@@ -217,6 +218,70 @@ async function compareBranches(branches: string[], metric: string, timeframe: st
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
+}
+
+// ── Questions Handler ─────────────────────────────────────────────────────────
+
+export interface Answer {
+  id: string;
+  questionId: string;
+  response: string;
+  confidence: number;
+  sources?: string[];
+  metadata?: {
+    model: string;
+    processingTime: number;
+    tokensUsed: number;
+  };
+  timestamp: string;
+}
+
+export async function answerQuestion(query: string): Promise<Answer> {
+  const start = Date.now();
+  const questionId = randomUUID();
+
+  const bucket = process.env.CIRCULATION_BUCKET || "library-analytics-circulation-dev-688567267460";
+  const prefix = process.env.CIRCULATION_PREFIX || "processed/";
+  const file = process.env.CIRCULATION_FILE || "circulation_data.json";
+
+  let circulationContext = "No circulation data available.";
+  try {
+    const s3Response = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: `${prefix}${file}` }));
+    const rawData = await s3Response.Body?.transformToString();
+    if (rawData) {
+      const parsed = JSON.parse(rawData);
+      const months: unknown[] = parsed.months || [];
+      const recentMonths = months.slice(-6);
+      const branches = months.length > 0 ? Object.keys((months[0] as Record<string, unknown>).branches as Record<string, unknown> || {}) : [];
+      circulationContext = `Branches tracked: ${branches.join(", ")}\n\nMost recent 6 months of data:\n${JSON.stringify(recentMonths, null, 2)}`;
+    }
+  } catch (err) {
+    logger.warn("Failed to fetch circulation data for question context:", err);
+  }
+
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const message = await client.messages.create({
+    model: process.env.CLAUDE_MODEL || "claude-haiku-4-5-20251001",
+    max_tokens: 1024,
+    system: "You are a library analytics assistant helping staff understand their circulation and programming data. Be concise, data-driven, and helpful.",
+    messages: [{ role: "user", content: `Question: ${query}\n\nLibrary Circulation Data:\n${circulationContext}` }],
+  });
+
+  const responseText = message.content[0].type === "text" ? message.content[0].text : "";
+
+  return {
+    id: randomUUID(),
+    questionId,
+    response: responseText,
+    confidence: 0.9,
+    sources: ["circulation_data"],
+    metadata: {
+      model: message.model,
+      processingTime: Date.now() - start,
+      tokensUsed: message.usage.input_tokens + message.usage.output_tokens,
+    },
+    timestamp: new Date().toISOString(),
+  };
 }
 
 // ── MCP Server ────────────────────────────────────────────────────────────────

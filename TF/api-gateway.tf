@@ -247,6 +247,13 @@ resource "aws_api_gateway_deployment" "circulation" {
       aws_api_gateway_authorizer.jwt.id,
       aws_api_gateway_gateway_response.unauthorized.id,
       aws_api_gateway_gateway_response.access_denied.id,
+      aws_api_gateway_resource.questions.id,
+      aws_api_gateway_resource.questions_ask.id,
+      aws_api_gateway_method.post_questions_ask.id,
+      aws_api_gateway_integration.post_questions_ask.id,
+      aws_api_gateway_method.options_questions_ask.id,
+      aws_api_gateway_integration.options_questions_ask.id,
+      aws_lambda_function.mcp_server.invoke_arn,
     ]))
   }
 
@@ -267,6 +274,8 @@ resource "aws_api_gateway_deployment" "circulation" {
     aws_api_gateway_integration.options_programming_history,
     aws_api_gateway_integration.get_programming_compare,
     aws_api_gateway_integration.options_programming_compare,
+    aws_api_gateway_integration.post_questions_ask,
+    aws_api_gateway_integration.options_questions_ask,
   ]
 }
 
@@ -622,6 +631,101 @@ resource "aws_api_gateway_integration_response" "options_programming_compare_200
   }
 
   depends_on = [aws_api_gateway_integration.options_programming_compare]
+}
+
+# ── /questions resource ───────────────────────────────────────────────────────
+
+resource "aws_api_gateway_resource" "questions" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  parent_id   = aws_api_gateway_rest_api.circulation.root_resource_id
+  path_part   = "questions"
+}
+
+# ── /questions/ask resource ───────────────────────────────────────────────────
+
+resource "aws_api_gateway_resource" "questions_ask" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  parent_id   = aws_api_gateway_resource.questions.id
+  path_part   = "ask"
+}
+
+# ── POST /questions/ask ───────────────────────────────────────────────────────
+
+resource "aws_api_gateway_method" "post_questions_ask" {
+  rest_api_id   = aws_api_gateway_rest_api.circulation.id
+  resource_id   = aws_api_gateway_resource.questions_ask.id
+  http_method   = "POST"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.jwt.id
+}
+
+resource "aws_api_gateway_integration" "post_questions_ask" {
+  rest_api_id             = aws_api_gateway_rest_api.circulation.id
+  resource_id             = aws_api_gateway_resource.questions_ask.id
+  http_method             = aws_api_gateway_method.post_questions_ask.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.mcp_server.invoke_arn
+}
+
+# ── OPTIONS /questions/ask (CORS preflight) ───────────────────────────────────
+
+resource "aws_api_gateway_method" "options_questions_ask" {
+  rest_api_id   = aws_api_gateway_rest_api.circulation.id
+  resource_id   = aws_api_gateway_resource.questions_ask.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_questions_ask" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.questions_ask.id
+  http_method = aws_api_gateway_method.options_questions_ask.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+resource "aws_api_gateway_method_response" "options_questions_ask_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.questions_ask.id
+  http_method = aws_api_gateway_method.options_questions_ask.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_questions_ask_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.questions_ask.id
+  http_method = aws_api_gateway_method.options_questions_ask.http_method
+  status_code = aws_api_gateway_method_response.options_questions_ask_200.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
+    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'${var.cors_origin}'"
+  }
+
+  depends_on = [aws_api_gateway_integration.options_questions_ask]
+}
+
+resource "aws_lambda_permission" "api_gateway_mcp_server" {
+  statement_id  = "AllowAPIGatewayInvokeMCPServer"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.mcp_server.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.circulation.execution_arn}/*/*"
 }
 
 # ── Gateway Responses — add CORS headers to authorizer error responses ────────

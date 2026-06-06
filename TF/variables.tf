@@ -141,6 +141,15 @@ variable "create_dynamodb_api_role" {
   default     = false
 }
 
+# ── Anthropic ────────────────────────────────────────────────────────────────
+
+variable "anthropic_api_key" {
+  description = "Anthropic Claude API key, stored in Secrets Manager by Terraform"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 # ── Auth0 ────────────────────────────────────────────────────────────────────
 
 variable "auth0_domain" {

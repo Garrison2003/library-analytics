@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { apiClient } from "../services/api";
+import type { Answer } from "../types/index";
 import BranchSelector from "../components/BranchSelector";
 import CirculationTrends from "../components/CirculationTrends";
 import ProgrammingCharts from "../components/ProgrammingCharts";
@@ -22,6 +23,7 @@ const Homepage: React.FC = () => {
   const [branches, setBranches] = useState<string[]>([]);
   const [isLoadingBranches, setIsLoadingBranches] = useState(true);
   const [isLoadingQuestion, setIsLoadingQuestion] = useState<boolean>(false);
+  const [questionAnswer, setQuestionAnswer] = useState<Answer | null>(null);
 
   // Fetch available branches on mount
   useEffect(() => {
@@ -48,9 +50,12 @@ const Homepage: React.FC = () => {
 
   const handleQuestionSubmit = async (question: string): Promise<void> => {
     setIsLoadingQuestion(true);
+    setQuestionAnswer(null);
     try {
-      // TODO: Connect to MCP server
-      console.log("Question submitted:", question);
+      const result = await apiClient.askQuestion(question);
+      if (result.success && result.data) {
+        setQuestionAnswer(result.data);
+      }
     } catch (error) {
       console.error("Error submitting question:", error);
     } finally {
@@ -117,6 +122,7 @@ const Homepage: React.FC = () => {
           <QuestionsSection
             onSubmit={handleQuestionSubmit}
             isLoading={isLoadingQuestion}
+            answer={questionAnswer}
           />
         </div>
       </section>
