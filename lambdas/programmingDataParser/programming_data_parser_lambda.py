@@ -512,7 +512,7 @@ def write_programming_data_to_dynamodb(
     try:
         table = dynamodb.Table(table_name)
         
-        with table.batch_writer(batch_size=25) as batch:
+        with table.batch_writer() as batch:
             for data in year_month_data:
                 item = {
                     "branch_code": branch_code,
@@ -639,7 +639,7 @@ def write_session_data_to_dynamodb(
         table = dynamodb.Table(table_name)
         now = datetime.now(timezone.utc).isoformat()
 
-        with table.batch_writer(batch_size=25) as batch:
+        with table.batch_writer() as batch:
             for s in sessions:
                 outreach_site = s.get("outreach_site") or ""
                 report_type = "outreach" if outreach_site else "in-house"
