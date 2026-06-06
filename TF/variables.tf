@@ -123,18 +123,6 @@ variable "dynamodb_gsi_write_capacity" {
   default     = 5 # Same as main table
 }
 
-variable "dynamodb_metadata_read_capacity" {
-  description = "Read capacity units for branch_metadata table (if using PROVISIONED mode)"
-  type        = number
-  default     = 10 # Low traffic
-}
-
-variable "dynamodb_metadata_write_capacity" {
-  description = "Write capacity units for branch_metadata table (if using PROVISIONED mode)"
-  type        = number
-  default     = 5 # Updates on each upload
-}
-
 variable "dynamodb_enable_ttl" {
   description = "Enable Time-to-Live to auto-delete data older than specified age"
   type        = bool
@@ -158,9 +146,11 @@ variable "create_dynamodb_api_role" {
 variable "auth0_domain" {
   description = "Auth0 tenant domain (e.g. your-tenant.us.auth0.com)"
   type        = string
+  default     = ""
 }
 
 variable "auth0_audience" {
   description = "Auth0 API audience identifier (must match VITE_AUTH0_AUDIENCE)"
   type        = string
+  default     = ""
 }
