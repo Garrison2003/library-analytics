@@ -13,6 +13,25 @@ resource "aws_api_gateway_rest_api" "circulation" {
   }
 }
 
+# ── JWT Authorizer (Auth0) ────────────────────────────────────────────────────
+
+resource "aws_api_gateway_authorizer" "jwt" {
+  name                             = "auth0-jwt"
+  rest_api_id                      = aws_api_gateway_rest_api.circulation.id
+  authorizer_uri                   = aws_lambda_function.api_authorizer.invoke_arn
+  type                             = "TOKEN"
+  identity_source                  = "method.request.header.Authorization"
+  authorizer_result_ttl_in_seconds = 300
+}
+
+resource "aws_lambda_permission" "api_gateway_authorizer" {
+  statement_id  = "AllowAPIGatewayInvokeAuthorizer"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.api_authorizer.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.circulation.execution_arn}/authorizers/*"
+}
+
 # /circulation resource
 resource "aws_api_gateway_resource" "circulation" {
   rest_api_id = aws_api_gateway_rest_api.circulation.id
@@ -26,7 +45,8 @@ resource "aws_api_gateway_method" "get_circulation" {
   rest_api_id   = aws_api_gateway_rest_api.circulation.id
   resource_id   = aws_api_gateway_resource.circulation.id
   http_method   = "GET"
-  authorization = "NONE"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.jwt.id
 }
 
 resource "aws_api_gateway_integration" "get_circulation" {
@@ -114,7 +134,8 @@ resource "aws_api_gateway_method" "get_programming" {
   rest_api_id   = aws_api_gateway_rest_api.circulation.id
   resource_id   = aws_api_gateway_resource.programming.id
   http_method   = "GET"
-  authorization = "NONE"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.jwt.id
 }
 
 resource "aws_api_gateway_integration" "get_programming" {
@@ -221,6 +242,7 @@ resource "aws_api_gateway_deployment" "circulation" {
       aws_api_gateway_integration.options_programming_compare.id,
       aws_lambda_function.programmingHistoryAPI.invoke_arn,
       aws_lambda_function.circulation_lambda.invoke_arn,
+      aws_api_gateway_authorizer.jwt.id,
     ]))
   }
 
@@ -274,7 +296,8 @@ resource "aws_api_gateway_method" "upload_post" {
   rest_api_id   = aws_api_gateway_rest_api.circulation.id
   resource_id   = aws_api_gateway_resource.upload.id
   http_method   = "POST"
-  authorization = "NONE"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.jwt.id
   request_parameters = {
     "method.request.header.Content-Type" = true
   }
@@ -357,7 +380,8 @@ resource "aws_api_gateway_method" "upload_validate_post" {
   rest_api_id   = aws_api_gateway_rest_api.circulation.id
   resource_id   = aws_api_gateway_resource.upload_validate.id
   http_method   = "POST"
-  authorization = "NONE"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.jwt.id
   request_parameters = {
     "method.request.header.Content-Type" = true
   }
@@ -440,11 +464,12 @@ resource "aws_api_gateway_method" "get_programming_history" {
   rest_api_id   = aws_api_gateway_rest_api.circulation.id
   resource_id   = aws_api_gateway_resource.programming_history.id
   http_method   = "GET"
-  authorization = "NONE"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.jwt.id
 
   request_parameters = {
     "method.request.querystring.branch" = true
-    "method.request.querystring.months" = false # Optional, defaults to 12
+    "method.request.querystring.months" = false
   }
 }
 
@@ -529,11 +554,12 @@ resource "aws_api_gateway_method" "get_programming_compare" {
   rest_api_id   = aws_api_gateway_rest_api.circulation.id
   resource_id   = aws_api_gateway_resource.programming_compare.id
   http_method   = "GET"
-  authorization = "NONE"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.jwt.id
 
   request_parameters = {
-    "method.request.querystring.branches" = true  # Comma-separated codes
-    "method.request.querystring.month"    = false # Optional: specific month
+    "method.request.querystring.branches" = true
+    "method.request.querystring.month"    = false
   }
 }
 
