@@ -1,10 +1,12 @@
 // src/components/QuestionsSection.tsx
 import React, { useState, useRef } from "react";
 import { Send, Loader } from "lucide-react";
+import type { Answer } from "../types/index";
 
 interface QuestionsProps {
   onSubmit: (question: string) => Promise<void>;
   isLoading?: boolean;
+  answer?: Answer | null;
 }
 
 /**
@@ -22,6 +24,7 @@ interface QuestionsProps {
 const QuestionsSection: React.FC<QuestionsProps> = ({
   onSubmit,
   isLoading = false,
+  answer = null,
 }) => {
   const [question, setQuestion] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -180,6 +183,21 @@ const QuestionsSection: React.FC<QuestionsProps> = ({
               Analyzing your data and preparing a response...
             </span>
           </div>
+        </div>
+      )}
+
+      {/* Answer */}
+      {!isLoading && answer && (
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <p className="text-sm font-semibold text-gray-700 mb-3">Answer</p>
+          <div className="bg-blue-50 rounded-lg p-4 text-gray-800 text-sm leading-relaxed whitespace-pre-wrap">
+            {answer.response}
+          </div>
+          {answer.metadata && (
+            <p className="text-xs text-gray-400 mt-2">
+              {answer.metadata.model} &middot; {answer.metadata.processingTime}ms &middot; {answer.metadata.tokensUsed} tokens
+            </p>
+          )}
         </div>
       )}
     </div>
