@@ -64,19 +64,6 @@ resource "aws_lambda_permission" "s3_invoke_circulation" {
   source_account = data.aws_caller_identity.current.account_id
 }
 
-resource "aws_s3_bucket_notification" "circulation_trigger" {
-  bucket = aws_s3_bucket.circulation.id
-
-  lambda_function {
-    lambda_function_arn = aws_lambda_function.circulation_lambda.arn
-    events              = ["s3:ObjectCreated:*"]
-    filter_prefix       = var.circulation_upload_prefix
-    filter_suffix       = ".xlsm"
-  }
-
-  depends_on = [aws_lambda_permission.s3_invoke_circulation]
-}
-
 # ── S3 → Programming Lambda trigger ──────────────────────────────────────────
 
 resource "aws_lambda_permission" "s3_invoke_programming" {
@@ -88,8 +75,17 @@ resource "aws_lambda_permission" "s3_invoke_programming" {
   source_account = data.aws_caller_identity.current.account_id
 }
 
-resource "aws_s3_bucket_notification" "programming_trigger" {
+# A bucket can only have one aws_s3_bucket_notification resource — all Lambda
+# triggers must be declared together or the last apply silently overwrites the rest.
+resource "aws_s3_bucket_notification" "bucket_triggers" {
   bucket = aws_s3_bucket.circulation.id
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.circulation_lambda.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = var.circulation_upload_prefix
+    filter_suffix       = ".xlsm"
+  }
 
   lambda_function {
     lambda_function_arn = aws_lambda_function.programmingDataParser.arn
@@ -105,5 +101,8 @@ resource "aws_s3_bucket_notification" "programming_trigger" {
     filter_suffix       = ".pdf"
   }
 
-  depends_on = [aws_lambda_permission.s3_invoke_programming]
+  depends_on = [
+    aws_lambda_permission.s3_invoke_circulation,
+    aws_lambda_permission.s3_invoke_programming,
+  ]
 }
