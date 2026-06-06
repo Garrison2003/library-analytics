@@ -100,8 +100,7 @@ resource "aws_lambda_function" "programmingHistoryAPI" {
 
   environment {
     variables = {
-      DYNAMODB_TABLE          = aws_dynamodb_table.programming_data.name
-      DYNAMODB_METADATA_TABLE = aws_dynamodb_table.branch_metadata.name
+      DYNAMODB_TABLE = aws_dynamodb_table.programming_data.name
     }
   }
 
@@ -174,9 +173,9 @@ resource "aws_iam_role_policy" "api_authorizer" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid    = "Logging"
-      Effect = "Allow"
-      Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+      Sid      = "Logging"
+      Effect   = "Allow"
+      Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
       Resource = "arn:aws:logs:*:*:*"
     }]
   })
@@ -197,9 +196,9 @@ resource "aws_lambda_function" "programmingDataParser" {
 
   environment {
     variables = {
-      PROCESSED_BUCKET        = aws_s3_bucket.circulation.id
-      DYNAMODB_TABLE          = aws_dynamodb_table.programming_data.name
-      DYNAMODB_METADATA_TABLE = aws_dynamodb_table.branch_metadata.name
+      PROCESSED_BUCKET       = aws_s3_bucket.circulation.id
+      DYNAMODB_TABLE         = aws_dynamodb_table.programming_data.name
+      PROGRAM_SESSIONS_TABLE = aws_dynamodb_table.program_sessions.name
     }
   }
 

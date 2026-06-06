@@ -77,6 +77,9 @@ BRANCH_CODE_MAP = {
 
 PROCESSED_DIR = "processed/programming"
 
+# Date format used in PDF report rows: "09-Apr-2026"
+_DATE_RE = re.compile(r"^\d{2}-[A-Za-z]{3}-\d{4}$")
+
 # Reverse mapping: partial branch name in filename → branch code
 BRANCH_NAME_TO_CODE = {
     "allegra": "ALW",
@@ -327,6 +330,8 @@ def parse_pdf_report(file_bytes: bytes) -> Optional[Dict[str, Any]]:
       - programs    : Grand Summary total # of programs
       - attendance  : Grand Summary total attendance
       - is_outreach : True if this is an Outreach report, False for In-House
+      - sessions    : List of per-session dicts with facilitator, program_name,
+                      program_date, num_programs, total_attendance, outreach_site
 
     Returns None on parse failure.
     """
@@ -359,18 +364,34 @@ def parse_pdf_report(file_bytes: bytes) -> Optional[Dict[str, Any]]:
 
         year_month = f"{year}-{month_num:02d}"
 
-        # Find Grand Summary row in extracted table data
-        # Row structure (in-house):  [Facilitator, ProgramName, Date, #Programs, Attendance]
-        # Row structure (outreach):  [Facilitator, Site, ProgramName, Date, #Programs, Attendance]
-        # Grand Summary row:         ["Grand Summary:", ..., "<programs>", "<attendance>"]
+        # Column layout differs by report type:
+        #   In-House : [Facilitator, ProgramName, Date, #Programs, Attendance]
+        #   Outreach : [Facilitator, Site, ProgramName, Date, #Programs, Attendance]
+        if is_outreach:
+            date_col, num_col, att_col = 3, 4, 5
+        else:
+            date_col, num_col, att_col = 2, 3, 4
+
+        def _c(row_data: List, i: int) -> str:
+            """Return cell i as a normalised string (newlines collapsed, stripped)."""
+            v = row_data[i] if len(row_data) > i else None
+            return str(v).strip().replace("\n", " ") if v is not None else ""
+
         programs = 0
         attendance = 0
+        sessions: List[Dict] = []
+        current_facilitator: Optional[str] = None
+        current_site: Optional[str] = None
+        current_program: Optional[str] = None
 
         for row in all_tables:
             if not row:
                 continue
-            first = str(row[0] or "").strip().lower()
-            if "grand summary" in first:
+
+            first = _c(row, 0)
+
+            # Grand Summary row — capture totals, then move on
+            if "grand summary" in first.lower():
                 non_empty = [str(v).strip() for v in row if v is not None and str(v).strip()]
                 if len(non_empty) >= 3:
                     try:
@@ -378,9 +399,50 @@ def parse_pdf_report(file_bytes: bytes) -> Optional[Dict[str, Any]]:
                         attendance = int(non_empty[-1].replace(",", ""))
                     except (ValueError, IndexError):
                         pass
-                break
+                continue
 
-        # Text fallback if table extraction missed the row
+            # Skip column-header rows (appear at top of each page)
+            if "primary facilitator" in first.lower():
+                continue
+
+            # Update carry-forward state for facilitator / site / program.
+            # These span multiple rows via merged cells; pdfplumber returns
+            # None for the continuation cells, so we only update on non-empty.
+            if first:
+                current_facilitator = first
+            if is_outreach:
+                v1, v2 = _c(row, 1), _c(row, 2)
+                if v1:
+                    current_site = v1
+                if v2:
+                    current_program = v2
+            else:
+                v1 = _c(row, 1)
+                if v1:
+                    current_program = v1
+
+            # Only emit a session record for rows that carry an individual date.
+            # Subtotal/total rows have an empty date column and are skipped here.
+            date_val = _c(row, date_col)
+            if not _DATE_RE.match(date_val):
+                continue
+
+            try:
+                program_date = datetime.strptime(date_val, "%d-%b-%Y").strftime("%Y-%m-%d")
+            except ValueError:
+                continue
+
+            if current_facilitator and current_program:
+                sessions.append({
+                    "primary_facilitator": current_facilitator,
+                    "program_name": current_program,
+                    "program_date": program_date,
+                    "num_programs": _safe_int(_c(row, num_col)),
+                    "total_attendance": _safe_int(_c(row, att_col)),
+                    "outreach_site": current_site if is_outreach else None,
+                })
+
+        # Text fallback if table extraction missed the Grand Summary row
         if programs == 0 and attendance == 0:
             grand_match = re.search(
                 r"Grand Summary[:\s]+(\d+)\s+(\d+)", full_text, re.IGNORECASE
@@ -390,8 +452,8 @@ def parse_pdf_report(file_bytes: bytes) -> Optional[Dict[str, Any]]:
                 attendance = int(grand_match.group(2))
 
         logger.info(
-            "PDF parsed: %s | programs=%d | attendance=%d | outreach=%s",
-            year_month, programs, attendance, is_outreach,
+            "PDF parsed: %s | programs=%d | attendance=%d | outreach=%s | sessions=%d",
+            year_month, programs, attendance, is_outreach, len(sessions),
         )
 
         return {
@@ -399,6 +461,7 @@ def parse_pdf_report(file_bytes: bytes) -> Optional[Dict[str, Any]]:
             "programs": programs,
             "attendance": attendance,
             "is_outreach": is_outreach,
+            "sessions": sessions,
         }
 
     except Exception as exc:
@@ -472,42 +535,12 @@ def write_programming_data_to_dynamodb(
                 )
                 
                 batch.put_item(Item=item)
-        
-        # Update branch metadata
-        update_branch_metadata(branch_code, branch_name)
-        
+
         logger.info("Successfully wrote %d records to DynamoDB for %s", len(year_month_data), branch_code)
         return True
         
     except Exception as exc:
         logger.exception("Error writing to DynamoDB: %s", str(exc))
-        return False
-
-
-def update_branch_metadata(branch_code: str, branch_name: str) -> bool:
-    """Update or create branch metadata record."""
-    table_name = _env("DYNAMODB_METADATA_TABLE", "branch-metadata")
-    
-    try:
-        table = dynamodb.Table(table_name)
-        
-        table.update_item(
-            Key={"branch_code": branch_code},
-            UpdateExpression="SET branch_name = :name, last_updated = :now, #ts = if_not_exists(#ts, :now)",
-            ExpressionAttributeNames={
-                "#ts": "created_date",  # created_date is a reserved word
-            },
-            ExpressionAttributeValues={
-                ":name": branch_name,
-                ":now": datetime.now(timezone.utc).isoformat(),
-            },
-        )
-        
-        logger.info("Updated metadata for branch %s", branch_code)
-        return True
-        
-    except Exception as exc:
-        logger.exception("Error updating branch metadata: %s", str(exc))
         return False
 
 
@@ -570,8 +603,6 @@ def write_pdf_data_to_dynamodb(
             ExpressionAttributeValues=attr_values,
         )
 
-        update_branch_metadata(branch_code, branch_name)
-
         logger.info(
             "DynamoDB upsert: %s %s (%s) programs=%d attendance=%d",
             branch_code, year_month,
@@ -583,6 +614,69 @@ def write_pdf_data_to_dynamodb(
     except Exception as exc:
         logger.exception("Error writing PDF data to DynamoDB: %s", str(exc))
         return False
+
+
+def write_session_data_to_dynamodb(
+    branch_code: str,
+    branch_name: str,
+    sessions: List[Dict],
+    filename: str,
+    year_month: str,
+) -> int:
+    """
+    Write per-session rows extracted from a PDF report to the program_sessions table.
+
+    Each item's sort key is  date#program_name#facilitator[#outreach_site]
+    so that re-uploading the same PDF is idempotent (put_item overwrites).
+
+    Returns the number of session records written (0 on failure or empty input).
+    """
+    table_name = _env("PROGRAM_SESSIONS_TABLE", "program-sessions")
+    if not sessions:
+        return 0
+
+    try:
+        table = dynamodb.Table(table_name)
+        now = datetime.now(timezone.utc).isoformat()
+
+        with table.batch_writer(batch_size=25) as batch:
+            for s in sessions:
+                outreach_site = s.get("outreach_site") or ""
+                report_type = "outreach" if outreach_site else "in-house"
+
+                key_parts = [s["program_date"], s["program_name"], s["primary_facilitator"]]
+                if outreach_site:
+                    key_parts.append(outreach_site)
+                session_key = "#".join(key_parts)
+
+                item: Dict[str, Any] = {
+                    "branch_code": branch_code,
+                    "session_key": session_key,
+                    "program_date": s["program_date"],
+                    "primary_facilitator": s["primary_facilitator"],
+                    "program_name": s["program_name"],
+                    "num_programs": s["num_programs"],
+                    "total_attendance": s["total_attendance"],
+                    "report_type": report_type,
+                    "year_month": year_month,
+                    "branch_name": branch_name,
+                    "data_source_file": filename,
+                    "created_at": now,
+                }
+                if outreach_site:
+                    item["outreach_site"] = outreach_site
+
+                batch.put_item(Item=item)
+
+        logger.info(
+            "Wrote %d session records to DynamoDB for %s %s",
+            len(sessions), branch_code, year_month,
+        )
+        return len(sessions)
+
+    except Exception as exc:
+        logger.exception("Error writing session data to DynamoDB: %s", str(exc))
+        return 0
 
 
 # ── Handlers ─────────────────────────────────────────────────────────────────
@@ -628,6 +722,11 @@ def handle_s3_event(event: dict) -> dict:
             dynamodb_success = write_pdf_data_to_dynamodb(
                 branch_code, branch_name, pdf_data, filename
             )
+            sessions_written = write_session_data_to_dynamodb(
+                branch_code, branch_name,
+                pdf_data.get("sessions", []),
+                filename, pdf_data["year_month"],
+            )
 
             logger.info("Processed PDF %s for branch %s", filename, branch_code)
             return {
@@ -639,6 +738,7 @@ def handle_s3_event(event: dict) -> dict:
                     "reportType": "outreach" if pdf_data["is_outreach"] else "in-house",
                     "programs": pdf_data["programs"],
                     "attendance": pdf_data["attendance"],
+                    "sessionsWritten": sessions_written,
                     "dynamodbSuccess": dynamodb_success,
                 }),
             }

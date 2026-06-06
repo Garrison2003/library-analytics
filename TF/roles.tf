@@ -194,10 +194,7 @@ resource "aws_iam_role_policy" "programming_history_lambda" {
           "dynamodb:GetItem",
           "dynamodb:Scan"
         ]
-        Resource = [
-          aws_dynamodb_table.programming_data.arn,
-          aws_dynamodb_table.branch_metadata.arn
-        ]
+        Resource = aws_dynamodb_table.programming_data.arn
       },
       {
         Sid      = "DynamoDBGSI"
@@ -296,23 +293,23 @@ resource "aws_iam_role_policy" "programmingDataParser" {
         Resource = "${aws_dynamodb_table.programming_data.arn}/index/DateIndex"
       },
       {
-        Sid    = "DynamoDBMetadataWrite"
+        Sid    = "DynamoDBSessionsWrite"
         Effect = "Allow"
         Action = [
           "dynamodb:PutItem",
-          "dynamodb:UpdateItem"
+          "dynamodb:BatchWriteItem"
         ]
-        Resource = aws_dynamodb_table.branch_metadata.arn
+        Resource = aws_dynamodb_table.program_sessions.arn
       },
       {
-        Sid    = "DynamoDBMetadataRead"
+        Sid    = "DynamoDBSessionsGSI"
         Effect = "Allow"
-        Action = [
-          "dynamodb:GetItem",
-          "dynamodb:Query",
-          "dynamodb:Scan"
+        Action = ["dynamodb:Query"]
+        Resource = [
+          "${aws_dynamodb_table.program_sessions.arn}/index/FacilitatorIndex",
+          "${aws_dynamodb_table.program_sessions.arn}/index/ProgramNameIndex",
+          "${aws_dynamodb_table.program_sessions.arn}/index/ProgramDateIndex",
         ]
-        Resource = aws_dynamodb_table.branch_metadata.arn
       }
     ]
   })
@@ -356,7 +353,6 @@ resource "aws_iam_role_policy" "dynamodb_api_access" {
         Resource = [
           aws_dynamodb_table.programming_data.arn,
           "${aws_dynamodb_table.programming_data.arn}/index/DateIndex",
-          aws_dynamodb_table.branch_metadata.arn
         ]
       }
     ]

@@ -65,20 +65,70 @@ resource "aws_dynamodb_table" "programming_data" {
   }
 }
 
-# ── Branch Metadata Table ────────────────────────────────────────────────────
+# ── Program Sessions Table ───────────────────────────────────────────────────
+# Stores one item per program session row parsed from In-House / Outreach PDFs.
+# PK: branch_code  SK: session_key (date#program_name#facilitator[#site])
+# Queryable by facilitator, program name, and program date via GSIs.
 
-resource "aws_dynamodb_table" "branch_metadata" {
-  name         = "${var.project_name}-branch-metadata-${var.environment}"
+resource "aws_dynamodb_table" "program_sessions" {
+  name         = "${var.project_name}-program-sessions-${var.environment}"
   billing_mode = var.dynamodb_billing_mode
   hash_key     = "branch_code"
+  range_key    = "session_key"
 
-  read_capacity  = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_metadata_read_capacity : null
-  write_capacity = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_metadata_write_capacity : null
+  read_capacity  = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_read_capacity : null
+  write_capacity = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_write_capacity : null
 
-  # Partition Key: branch_code (e.g., "IMG")
   attribute {
     name = "branch_code"
     type = "S"
+  }
+
+  attribute {
+    name = "session_key"
+    type = "S"
+  }
+
+  attribute {
+    name = "primary_facilitator"
+    type = "S"
+  }
+
+  attribute {
+    name = "program_name"
+    type = "S"
+  }
+
+  attribute {
+    name = "program_date"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "FacilitatorIndex"
+    hash_key        = "primary_facilitator"
+    range_key       = "program_date"
+    projection_type = "ALL"
+    read_capacity   = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_gsi_read_capacity : null
+    write_capacity  = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_gsi_write_capacity : null
+  }
+
+  global_secondary_index {
+    name            = "ProgramNameIndex"
+    hash_key        = "program_name"
+    range_key       = "program_date"
+    projection_type = "ALL"
+    read_capacity   = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_gsi_read_capacity : null
+    write_capacity  = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_gsi_write_capacity : null
+  }
+
+  global_secondary_index {
+    name            = "ProgramDateIndex"
+    hash_key        = "program_date"
+    range_key       = "branch_code"
+    projection_type = "ALL"
+    read_capacity   = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_gsi_read_capacity : null
+    write_capacity  = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_gsi_write_capacity : null
   }
 
   point_in_time_recovery {
@@ -86,9 +136,9 @@ resource "aws_dynamodb_table" "branch_metadata" {
   }
 
   tags = {
-    Name        = "${var.project_name}-branch-metadata"
+    Name        = "${var.project_name}-program-sessions"
     Environment = var.environment
-    Type        = "Reference Data"
+    Type        = "Session Data"
   }
 }
 
@@ -151,17 +201,17 @@ output "programming_data_table_arn" {
   value       = aws_dynamodb_table.programming_data.arn
 }
 
-output "branch_metadata_table_name" {
-  description = "Name of the DynamoDB branch metadata table"
-  value       = aws_dynamodb_table.branch_metadata.name
-}
-
-output "branch_metadata_table_arn" {
-  description = "ARN of the DynamoDB branch metadata table"
-  value       = aws_dynamodb_table.branch_metadata.arn
-}
-
 output "date_index_name" {
   description = "Name of the DateIndex GSI"
   value       = "DateIndex"
+}
+
+output "program_sessions_table_name" {
+  description = "Name of the program sessions DynamoDB table"
+  value       = aws_dynamodb_table.program_sessions.name
+}
+
+output "program_sessions_table_arn" {
+  description = "ARN of the program sessions DynamoDB table"
+  value       = aws_dynamodb_table.program_sessions.arn
 }

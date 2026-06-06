@@ -22,7 +22,7 @@ from programming_data_parser_lambda import (
     parse_pdf_report,
     write_programming_data_to_dynamodb,
     write_pdf_data_to_dynamodb,
-    update_branch_metadata,
+    write_session_data_to_dynamodb,
     handle_s3_event,
     lambda_handler,
 )
@@ -302,7 +302,6 @@ class TestWriteProgrammingDataToDynamoDB:
     @pytest.fixture(autouse=True)
     def setup(self, mock_dynamodb, monkeypatch):
         monkeypatch.setenv("DYNAMODB_TABLE", "test-table")
-        monkeypatch.setenv("DYNAMODB_METADATA_TABLE", "test-meta-table")
         self.table, self.batch = _mock_table(mock_dynamodb)
 
     def _records(self, count=1):
@@ -351,33 +350,6 @@ class TestWriteProgrammingDataToDynamoDB:
         assert result is False
 
 
-# ── TestUpdateBranchMetadata ──────────────────────────────────────────────────
-
-
-class TestUpdateBranchMetadata:
-    @pytest.fixture(autouse=True)
-    def setup(self, mock_dynamodb, monkeypatch):
-        monkeypatch.setenv("DYNAMODB_METADATA_TABLE", "test-meta-table")
-        self.table, _ = _mock_table(mock_dynamodb)
-
-    def test_returns_true_on_success(self):
-        assert update_branch_metadata("IMG", "Imaginon") is True
-
-    def test_calls_update_item_with_correct_key(self):
-        update_branch_metadata("IMG", "Imaginon")
-        kwargs = self.table.update_item.call_args.kwargs
-        assert kwargs["Key"] == {"branch_code": "IMG"}
-
-    def test_sets_branch_name(self):
-        update_branch_metadata("MAI", "Main")
-        kwargs = self.table.update_item.call_args.kwargs
-        assert kwargs["ExpressionAttributeValues"][":name"] == "Main"
-
-    def test_returns_false_on_exception(self):
-        self.table.update_item.side_effect = Exception("error")
-        assert update_branch_metadata("IMG", "Imaginon") is False
-
-
 # ── TestHandleS3Event ─────────────────────────────────────────────────────────
 
 
@@ -386,7 +358,6 @@ class TestHandleS3Event:
     def setup(self, mock_s3, mock_dynamodb, monkeypatch):
         monkeypatch.setenv("PROCESSED_BUCKET", "proc-bucket")
         monkeypatch.setenv("DYNAMODB_TABLE", "test-table")
-        monkeypatch.setenv("DYNAMODB_METADATA_TABLE", "test-meta-table")
         mock_s3.get_object.return_value = _s3_body(b"fake xlsx bytes")
         mock_s3.put_object.return_value = {}
         _mock_table(mock_dynamodb)
@@ -563,7 +534,6 @@ class TestWritePdfDataToDynamoDB:
     @pytest.fixture(autouse=True)
     def setup(self, mock_dynamodb, monkeypatch):
         monkeypatch.setenv("DYNAMODB_TABLE", "test-table")
-        monkeypatch.setenv("DYNAMODB_METADATA_TABLE", "test-meta-table")
         self.table, _ = _mock_table(mock_dynamodb)
 
     def _in_house_data(self):
@@ -614,11 +584,10 @@ class TestHandleS3EventPdf:
     def setup(self, mock_s3, mock_dynamodb, monkeypatch):
         monkeypatch.setenv("PROCESSED_BUCKET", "proc-bucket")
         monkeypatch.setenv("DYNAMODB_TABLE", "test-table")
-        monkeypatch.setenv("DYNAMODB_METADATA_TABLE", "test-meta-table")
         mock_s3.get_object.return_value = _s3_body(b"fake pdf bytes")
         _mock_table(mock_dynamodb)
 
-    PDF_DATA = {"year_month": "2026-04", "programs": 69, "attendance": 4389, "is_outreach": False}
+    PDF_DATA = {"year_month": "2026-04", "programs": 69, "attendance": 4389, "is_outreach": False, "sessions": []}
 
     def test_pdf_returns_200(self):
         with patch("programming_data_parser_lambda.parse_pdf_report", return_value=self.PDF_DATA):
@@ -649,7 +618,6 @@ class TestLambdaHandler:
     def setup(self, monkeypatch, mock_dynamodb):
         monkeypatch.setenv("PROCESSED_BUCKET", "test-bucket")
         monkeypatch.setenv("DYNAMODB_TABLE", "test-table")
-        monkeypatch.setenv("DYNAMODB_METADATA_TABLE", "test-meta-table")
         _mock_table(mock_dynamodb)
 
     def test_routes_s3_xlsx_event(self, mock_s3):
@@ -661,7 +629,178 @@ class TestLambdaHandler:
 
     def test_routes_s3_pdf_event(self, mock_s3):
         mock_s3.get_object.return_value = _s3_body(b"fake pdf")
-        pdf_data = {"year_month": "2026-04", "programs": 69, "attendance": 4389, "is_outreach": False}
+        pdf_data = {"year_month": "2026-04", "programs": 69, "attendance": 4389, "is_outreach": False, "sessions": []}
         with patch("programming_data_parser_lambda.parse_pdf_report", return_value=pdf_data):
             resp = lambda_handler(_s3_event("bucket", "uploads/programming/Spangler_In-House_2026.pdf"), None)
         assert resp["statusCode"] == 200
+
+
+# ── TestWriteSessionDataToDynamoDB ────────────────────────────────────────────
+
+
+class TestWriteSessionDataToDynamoDB:
+    @pytest.fixture(autouse=True)
+    def setup(self, mock_dynamodb, monkeypatch):
+        monkeypatch.setenv("PROGRAM_SESSIONS_TABLE", "test-sessions-table")
+        self.table, self.batch = _mock_table(mock_dynamodb)
+
+    def _sessions(self, count=1, outreach=False):
+        base = {
+            "primary_facilitator": "achaussard@cmlibrary.org",
+            "program_name": "Family Storytime",
+            "program_date": "2026-04-09",
+            "num_programs": 1,
+            "total_attendance": 107,
+            "outreach_site": "Test Site" if outreach else None,
+        }
+        return [dict(base, program_date=f"2026-04-{9 + i:02d}") for i in range(count)]
+
+    def test_returns_count_of_sessions_written(self):
+        assert write_session_data_to_dynamodb("SPA", "Spangler", self._sessions(3), "f.pdf", "2026-04") == 3
+
+    def test_returns_zero_for_empty_sessions(self):
+        assert write_session_data_to_dynamodb("SPA", "Spangler", [], "f.pdf", "2026-04") == 0
+
+    def test_calls_put_item_for_each_session(self):
+        write_session_data_to_dynamodb("SPA", "Spangler", self._sessions(2), "f.pdf", "2026-04")
+        assert self.batch.put_item.call_count == 2
+
+    def test_item_contains_required_fields(self):
+        write_session_data_to_dynamodb("SPA", "Spangler", self._sessions(), "f.pdf", "2026-04")
+        item = self.batch.put_item.call_args.kwargs["Item"]
+        assert item["branch_code"] == "SPA"
+        assert item["primary_facilitator"] == "achaussard@cmlibrary.org"
+        assert item["program_name"] == "Family Storytime"
+        assert item["program_date"] == "2026-04-09"
+        assert item["num_programs"] == 1
+        assert item["total_attendance"] == 107
+
+    def test_session_key_contains_date_program_facilitator(self):
+        write_session_data_to_dynamodb("SPA", "Spangler", self._sessions(), "f.pdf", "2026-04")
+        item = self.batch.put_item.call_args.kwargs["Item"]
+        key = item["session_key"]
+        assert "2026-04-09" in key
+        assert "Family Storytime" in key
+        assert "achaussard@cmlibrary.org" in key
+
+    def test_outreach_session_key_includes_site(self):
+        write_session_data_to_dynamodb("SPA", "Spangler", self._sessions(outreach=True), "f.pdf", "2026-04")
+        item = self.batch.put_item.call_args.kwargs["Item"]
+        assert "Test Site" in item["session_key"]
+        assert item["outreach_site"] == "Test Site"
+        assert item["report_type"] == "outreach"
+
+    def test_in_house_report_type(self):
+        write_session_data_to_dynamodb("SPA", "Spangler", self._sessions(), "f.pdf", "2026-04")
+        item = self.batch.put_item.call_args.kwargs["Item"]
+        assert item["report_type"] == "in-house"
+        assert "outreach_site" not in item
+
+    def test_returns_zero_on_exception(self):
+        self.table.batch_writer.side_effect = Exception("DynamoDB down")
+        result = write_session_data_to_dynamodb("SPA", "Spangler", self._sessions(), "f.pdf", "2026-04")
+        assert result == 0
+
+
+# ── TestParsePdfSessions ──────────────────────────────────────────────────────
+
+
+def _mock_pdf_with_tables(text: str, table_rows: list):
+    """Build a pdfplumber mock with multiple table rows on a single page."""
+    page = MagicMock()
+    page.extract_text.return_value = text
+    page.extract_tables.return_value = [table_rows]
+    pdf = MagicMock()
+    pdf.__enter__ = MagicMock(return_value=pdf)
+    pdf.__exit__ = MagicMock(return_value=False)
+    pdf.pages = [page]
+    return pdf
+
+
+_BASE_TEXT = (
+    "JM Spangler In-House Programs\n"
+    "Program Date: Apr 2026(Included)\n"
+)
+
+_BASE_TEXT_OUTREACH = (
+    "JM Spangler Outreach Programs\n"
+    "Program Date: Apr 2026(Included)\n"
+)
+
+
+class TestParsePdfSessions:
+    def test_single_in_house_row_produces_one_session(self):
+        rows = [
+            ["Primary Facilitator", "Program Name", "Date of Program Date", "# of Programs", "Total Attendance"],
+            ["achaussard@cmlibrary.org", "Family Storytime", "09-Apr-2026", "1", "107"],
+        ]
+        with patch("programming_data_parser_lambda.pdfplumber.open",
+                   return_value=_mock_pdf_with_tables(_BASE_TEXT, rows)):
+            result = parse_pdf_report(b"fake")
+        assert len(result["sessions"]) == 1
+        s = result["sessions"][0]
+        assert s["primary_facilitator"] == "achaussard@cmlibrary.org"
+        assert s["program_name"] == "Family Storytime"
+        assert s["program_date"] == "2026-04-09"
+        assert s["num_programs"] == 1
+        assert s["total_attendance"] == 107
+        assert s["outreach_site"] is None
+
+    def test_carry_forward_fills_missing_facilitator_and_program(self):
+        rows = [
+            ["Primary Facilitator", "Program Name", "Date of Program Date", "# of Programs", "Total Attendance"],
+            ["achaussard@cmlibrary.org", "Family Storytime", "09-Apr-2026", "1", "107"],
+            [None, None, "16-Apr-2026", "1", "43"],
+            [None, None, "30-Apr-2026", "1", "74"],
+        ]
+        with patch("programming_data_parser_lambda.pdfplumber.open",
+                   return_value=_mock_pdf_with_tables(_BASE_TEXT, rows)):
+            result = parse_pdf_report(b"fake")
+        sessions = result["sessions"]
+        assert len(sessions) == 3
+        for s in sessions:
+            assert s["primary_facilitator"] == "achaussard@cmlibrary.org"
+            assert s["program_name"] == "Family Storytime"
+
+    def test_subtotal_rows_without_date_are_skipped(self):
+        rows = [
+            ["Primary Facilitator", "Program Name", "Date of Program Date", "# of Programs", "Total Attendance"],
+            ["achaussard@cmlibrary.org", "Family Storytime", "09-Apr-2026", "1", "107"],
+            [None, "Family Storytime", None, "1", "107"],         # program subtotal
+            ["achaussard@cmlibrary.org", None, None, "1", "107"], # facilitator total
+        ]
+        with patch("programming_data_parser_lambda.pdfplumber.open",
+                   return_value=_mock_pdf_with_tables(_BASE_TEXT, rows)):
+            result = parse_pdf_report(b"fake")
+        assert len(result["sessions"]) == 1
+
+    def test_outreach_session_includes_site(self):
+        rows = [
+            ["Primary Facilitator", "Outreach Site", "Program Name", "Date of Program Date", "# of Programs", "Total Attendance"],
+            ["bworthington@cmlibrary.org", "Hawthorne Lane Preschool", "Preschool Storytime", "01-Apr-2026", "1", "71"],
+        ]
+        with patch("programming_data_parser_lambda.pdfplumber.open",
+                   return_value=_mock_pdf_with_tables(_BASE_TEXT_OUTREACH, rows)):
+            result = parse_pdf_report(b"fake")
+        assert len(result["sessions"]) == 1
+        s = result["sessions"][0]
+        assert s["outreach_site"] == "Hawthorne Lane Preschool"
+        assert s["program_name"] == "Preschool Storytime"
+        assert s["primary_facilitator"] == "bworthington@cmlibrary.org"
+
+    def test_sessions_key_present_even_when_empty(self):
+        with patch("programming_data_parser_lambda.pdfplumber.open",
+                   return_value=_mock_pdf(PDF_TEXT_IN_HOUSE)):
+            result = parse_pdf_report(b"fake")
+        assert "sessions" in result
+        assert isinstance(result["sessions"], list)
+
+    def test_newline_in_program_name_is_normalised(self):
+        rows = [
+            ["Primary Facilitator", "Program Name", "Date of Program Date", "# of Programs", "Total Attendance"],
+            ["achaussard@cmlibrary.org", "Preschool Storytime: Listen &\nMove", "09-Apr-2026", "1", "57"],
+        ]
+        with patch("programming_data_parser_lambda.pdfplumber.open",
+                   return_value=_mock_pdf_with_tables(_BASE_TEXT, rows)):
+            result = parse_pdf_report(b"fake")
+        assert result["sessions"][0]["program_name"] == "Preschool Storytime: Listen & Move"
