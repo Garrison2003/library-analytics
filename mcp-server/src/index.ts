@@ -6,6 +6,12 @@ import { randomUUID } from "node:crypto";
 
 const app = express();
 app.use(express.json());
+app.use((_req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  next();
+});
 
 app.get("/health", (_req, res) => {
   res.json({ status: "healthy", timestamp: new Date().toISOString() });
