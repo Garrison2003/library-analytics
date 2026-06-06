@@ -55,10 +55,10 @@ app.post("/questions/ask", async (req, res) => {
       requestId: randomUUID(),
     });
   } catch (error) {
-    logger.error("Questions ask error:", error);
+    logger.error({ err: error }, "Questions ask error");
     res.status(500).json({
       success: false,
-      error: { code: "AI_ERROR", message: error instanceof Error ? error.message : "Unknown error" },
+      error: { code: "AI_ERROR", message: error instanceof Error ? error.message : String(error) },
       timestamp: new Date().toISOString(),
       requestId: randomUUID(),
     });
