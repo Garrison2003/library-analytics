@@ -256,7 +256,7 @@ export async function answerQuestion(query: string): Promise<Answer> {
       circulationContext = `Branches tracked: ${branches.join(", ")}\n\nMost recent 6 months of data:\n${JSON.stringify(recentMonths, null, 2)}`;
     }
   } catch (err) {
-    logger.warn("Failed to fetch circulation data for question context:", err);
+    logger.warn({ err }, "Failed to fetch circulation data for question context");
   }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
