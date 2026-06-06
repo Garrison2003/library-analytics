@@ -242,7 +242,11 @@ resource "aws_api_gateway_deployment" "circulation" {
       aws_api_gateway_integration.options_programming_compare.id,
       aws_lambda_function.programmingHistoryAPI.invoke_arn,
       aws_lambda_function.circulation_lambda.invoke_arn,
+      aws_lambda_function.upload_handler.invoke_arn,
+      aws_lambda_function.api_authorizer.invoke_arn,
       aws_api_gateway_authorizer.jwt.id,
+      aws_api_gateway_gateway_response.unauthorized.id,
+      aws_api_gateway_gateway_response.access_denied.id,
     ]))
   }
 
