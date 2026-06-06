@@ -219,6 +219,8 @@ resource "aws_api_gateway_deployment" "circulation" {
       aws_api_gateway_integration.get_programming_compare.id,
       aws_api_gateway_method.options_programming_compare.id,
       aws_api_gateway_integration.options_programming_compare.id,
+      aws_lambda_function.programmingHistoryAPI.invoke_arn,
+      aws_lambda_function.circulation_lambda.invoke_arn,
     ]))
   }
 
