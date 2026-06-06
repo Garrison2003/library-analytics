@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Auth0Provider, useAuth0 } from "@auth0/auth0-react";
 import { apiClient } from "./services/api";
 import Homepage from "./pages/Homepage";
@@ -29,15 +29,14 @@ function AppContent() {
   const { isLoading, isAuthenticated, error, user, getAccessTokenSilently } = useAuth0();
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      apiClient.setTokenGetter(() =>
-        getAccessTokenSilently({
-          authorizationParams: { audience: auth0Audience },
-        }),
-      );
-    }
-  }, [isAuthenticated, getAccessTokenSilently]);
+  // Must be set in render (not useEffect) so children's useEffect hooks see it on first mount.
+  if (isAuthenticated) {
+    apiClient.setTokenGetter(() =>
+      getAccessTokenSilently({
+        authorizationParams: { audience: auth0Audience },
+      }),
+    );
+  }
 
   if (isLoading) {
     return (
