@@ -102,6 +102,63 @@ const tools = [
       required: ["branches", "metric", "timeframe"],
     },
   },
+  {
+    name: "get_programming_sessions",
+    description: "Retrieves per-session programming detail from DynamoDB (facilitator, program name, attendance, report type) for a branch and date range",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        branch: { type: "string", description: "Branch code (e.g. SPA, IMG, TEL)" },
+        startDate: { type: "string", description: "Start date YYYY-MM-DD" },
+        endDate: { type: "string", description: "End date YYYY-MM-DD" },
+        reportType: { type: "string", enum: ["in-house", "outreach"], description: "Optional: filter by report type" },
+      },
+      required: ["branch", "startDate", "endDate"],
+    },
+  },
+  {
+    name: "get_sessions_by_facilitator",
+    description: "Finds all programming sessions led by a specific facilitator, optionally filtered by date range",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        facilitator: { type: "string", description: "Facilitator name (partial match supported)" },
+        startDate: { type: "string", description: "Optional start date YYYY-MM-DD" },
+        endDate: { type: "string", description: "Optional end date YYYY-MM-DD" },
+      },
+      required: ["facilitator"],
+    },
+  },
+  {
+    name: "get_sessions_by_program",
+    description: "Finds all occurrences of a specific program across branches, optionally filtered by date range",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        programName: { type: "string", description: "Program name (partial match supported)" },
+        startDate: { type: "string", description: "Optional start date YYYY-MM-DD" },
+        endDate: { type: "string", description: "Optional end date YYYY-MM-DD" },
+      },
+      required: ["programName"],
+    },
+  },
+  {
+    name: "analyze_programming_trends",
+    description: "Uses Claude AI to analyze programming attendance trends, flag anomalies, or generate recommendations for a branch",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        branch: { type: "string", description: "Branch code (e.g. SPA, IMG) or 'ALL' for system-wide" },
+        months: { type: "number", description: "Number of months to analyze (default 6)" },
+        analysisType: {
+          type: "string",
+          enum: ["summary", "trends", "anomalies", "recommendations"],
+          description: "Type of analysis to perform",
+        },
+      },
+      required: ["branch", "analysisType"],
+    },
+  },
 ];
 
 // ── Tool Implementations ──────────────────────────────────────────────────────
@@ -197,6 +254,186 @@ async function getProgrammingData(branch: string, startDate: string, endDate: st
       },
     }));
     return { success: true, branch, timeRange: { startDate, endDate }, eventCount: response.Items?.length || 0, data: response.Items || [] };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
+async function getProgrammingSessions(branch: string, startDate: string, endDate: string, reportType?: string) {
+  try {
+    const tableName = process.env.DYNAMODB_PROGRAM_SESSIONS_TABLE || "library-analytics-program-sessions-dev";
+    // session_key format: YYYY-MM-DD#program_name#facilitator[#site]
+    // Using begins_with on date prefix to cover the range
+    const params: any = {
+      TableName: tableName,
+      KeyConditionExpression: "branch_code = :branch AND session_key BETWEEN :start AND :end",
+      ExpressionAttributeValues: {
+        ":branch": branch,
+        ":start": startDate,
+        ":end": endDate + "￿",
+      },
+    };
+    if (reportType) {
+      params.FilterExpression = "report_type = :rt";
+      params.ExpressionAttributeValues[":rt"] = reportType;
+    }
+    const response = await dynamoDb.send(new QueryCommand(params));
+    return {
+      success: true,
+      branch,
+      timeRange: { startDate, endDate },
+      sessionCount: response.Items?.length || 0,
+      data: response.Items || [],
+    };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
+async function getSessionsByFacilitator(facilitator: string, startDate?: string, endDate?: string) {
+  try {
+    const tableName = process.env.DYNAMODB_PROGRAM_SESSIONS_TABLE || "library-analytics-program-sessions-dev";
+    const params: any = {
+      TableName: tableName,
+      IndexName: "FacilitatorIndex",
+      KeyConditionExpression: "primary_facilitator = :facilitator",
+      ExpressionAttributeValues: { ":facilitator": facilitator },
+    };
+    if (startDate && endDate) {
+      params.KeyConditionExpression += " AND program_date BETWEEN :start AND :end";
+      params.ExpressionAttributeValues[":start"] = startDate;
+      params.ExpressionAttributeValues[":end"] = endDate;
+    } else if (startDate) {
+      params.KeyConditionExpression += " AND program_date >= :start";
+      params.ExpressionAttributeValues[":start"] = startDate;
+    } else if (endDate) {
+      params.KeyConditionExpression += " AND program_date <= :end";
+      params.ExpressionAttributeValues[":end"] = endDate;
+    }
+    const response = await dynamoDb.send(new QueryCommand(params));
+    return {
+      success: true,
+      facilitator,
+      timeRange: { startDate, endDate },
+      sessionCount: response.Items?.length || 0,
+      totalAttendance: (response.Items || []).reduce((sum: number, item: any) => sum + (item.total_attendance || 0), 0),
+      data: response.Items || [],
+    };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
+async function getSessionsByProgram(programName: string, startDate?: string, endDate?: string) {
+  try {
+    const tableName = process.env.DYNAMODB_PROGRAM_SESSIONS_TABLE || "library-analytics-program-sessions-dev";
+    const params: any = {
+      TableName: tableName,
+      IndexName: "ProgramNameIndex",
+      KeyConditionExpression: "program_name = :program",
+      ExpressionAttributeValues: { ":program": programName },
+    };
+    if (startDate && endDate) {
+      params.KeyConditionExpression += " AND program_date BETWEEN :start AND :end";
+      params.ExpressionAttributeValues[":start"] = startDate;
+      params.ExpressionAttributeValues[":end"] = endDate;
+    } else if (startDate) {
+      params.KeyConditionExpression += " AND program_date >= :start";
+      params.ExpressionAttributeValues[":start"] = startDate;
+    } else if (endDate) {
+      params.KeyConditionExpression += " AND program_date <= :end";
+      params.ExpressionAttributeValues[":end"] = endDate;
+    }
+    const response = await dynamoDb.send(new QueryCommand(params));
+    const items = response.Items || [];
+    const byBranch: Record<string, number> = {};
+    for (const item of items) {
+      const code = item.branch_code as string;
+      byBranch[code] = (byBranch[code] || 0) + (item.total_attendance || 0);
+    }
+    return {
+      success: true,
+      programName,
+      timeRange: { startDate, endDate },
+      sessionCount: items.length,
+      totalAttendance: items.reduce((sum: number, item: any) => sum + (item.total_attendance || 0), 0),
+      attendanceByBranch: byBranch,
+      data: items,
+    };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
+async function analyzeProgrammingTrends(branch: string, analysisType: string, months: number = 6) {
+  try {
+    const programmingTable = process.env.DYNAMODB_PROGRAMMING_TABLE || "library-analytics-programming-data-dev";
+    const sessionsTable = process.env.DYNAMODB_PROGRAM_SESSIONS_TABLE || "library-analytics-program-sessions-dev";
+
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - months);
+    const startYM = startDate.toISOString().slice(0, 7);
+    const endYM = endDate.toISOString().slice(0, 7);
+
+    let monthlyData: unknown[] = [];
+    let sessionData: unknown[] = [];
+
+    if (branch === "ALL") {
+      const scanResp = await dynamoDb.send(new ScanCommand({
+        TableName: programmingTable,
+        FilterExpression: "year_month BETWEEN :start AND :end",
+        ExpressionAttributeValues: { ":start": startYM, ":end": endYM },
+      }));
+      monthlyData = scanResp.Items || [];
+    } else {
+      const queryResp = await dynamoDb.send(new QueryCommand({
+        TableName: programmingTable,
+        KeyConditionExpression: "branch_code = :branch AND year_month BETWEEN :start AND :end",
+        ExpressionAttributeValues: { ":branch": branch, ":start": startYM, ":end": endYM },
+      }));
+      monthlyData = queryResp.Items || [];
+
+      const sessionsResp = await dynamoDb.send(new QueryCommand({
+        TableName: sessionsTable,
+        KeyConditionExpression: "branch_code = :branch AND session_key BETWEEN :start AND :end",
+        ExpressionAttributeValues: {
+          ":branch": branch,
+          ":start": startDate.toISOString().slice(0, 10),
+          ":end": endDate.toISOString().slice(0, 10) + "￿",
+        },
+      }));
+      sessionData = sessionsResp.Items || [];
+    }
+
+    const prompt = `You are a library analytics expert. Analyze the following programming data for ${branch === "ALL" ? "all branches" : `branch ${branch}`} over the last ${months} months.
+
+Analysis type: ${analysisType}
+
+Monthly aggregate data (${monthlyData.length} records):
+${JSON.stringify(monthlyData, null, 2)}
+
+${sessionData.length > 0 ? `Per-session data (${sessionData.length} sessions):\n${JSON.stringify(sessionData, null, 2)}` : ""}
+
+Provide a ${analysisType} focused response. Be specific, data-driven, and actionable.`;
+
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const message = await client.messages.create({
+      model: process.env.CLAUDE_MODEL || "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const analysis = message.content[0].type === "text" ? message.content[0].text : "";
+    return {
+      success: true,
+      branch,
+      analysisType,
+      monthsAnalyzed: months,
+      dataPoints: { monthlyRecords: monthlyData.length, sessions: sessionData.length },
+      analysis,
+      metadata: { model: message.model, tokensUsed: message.usage.input_tokens + message.usage.output_tokens },
+    };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
@@ -318,6 +555,18 @@ export function createServer(): Server {
           break;
         case "compare_branches":
           result = await compareBranches(args.branches as string[], args.metric as string, args.timeframe as string);
+          break;
+        case "get_programming_sessions":
+          result = await getProgrammingSessions(args.branch as string, args.startDate as string, args.endDate as string, args.reportType as string | undefined);
+          break;
+        case "get_sessions_by_facilitator":
+          result = await getSessionsByFacilitator(args.facilitator as string, args.startDate as string | undefined, args.endDate as string | undefined);
+          break;
+        case "get_sessions_by_program":
+          result = await getSessionsByProgram(args.programName as string, args.startDate as string | undefined, args.endDate as string | undefined);
+          break;
+        case "analyze_programming_trends":
+          result = await analyzeProgrammingTrends(args.branch as string, args.analysisType as string, args.months as number | undefined);
           break;
         default:
           return { isError: true, content: [{ type: "text", text: `Unknown tool: ${name}` }] };
