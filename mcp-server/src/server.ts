@@ -521,9 +521,16 @@ export async function answerQuestion(query: string): Promise<Answer> {
 
     const monthlyItems = monthlyResp.Items || [];
     const sessionItems = sessionsResp.Items || [];
-    programmingContext = `Monthly programming aggregates (${monthlyItems.length} records, ${startYM} to ${endYM}):\n${JSON.stringify(monthlyItems, null, 2)}\n\nIndividual program sessions (${sessionItems.length} records):\n${JSON.stringify(sessionItems, null, 2)}`;
+
+    if (monthlyItems.length === 0 && sessionItems.length === 0) {
+      programmingContext = `Programming tables are accessible but contain no data for ${startYM} to ${endYM}. No programming files have been uploaded yet for this period.`;
+    } else {
+      programmingContext = `Monthly programming aggregates (${monthlyItems.length} records, ${startYM} to ${endYM}):\n${JSON.stringify(monthlyItems, null, 2)}\n\nIndividual program sessions (${sessionItems.length} records):\n${JSON.stringify(sessionItems, null, 2)}`;
+    }
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     logger.warn({ err }, "Failed to fetch programming data for question context");
+    programmingContext = `Programming data could not be retrieved (error: ${msg}). Check AWS credentials and table names.`;
   }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
