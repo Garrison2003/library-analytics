@@ -496,12 +496,42 @@ export async function answerQuestion(query: string): Promise<Answer> {
     logger.warn({ err }, "Failed to fetch circulation data for question context");
   }
 
+  // Fetch recent programming data for all branches
+  let programmingContext = "No programming data available.";
+  try {
+    const programmingTable = process.env.DYNAMODB_PROGRAMMING_TABLE || "library-analytics-programming-data-dev";
+    const sessionsTable = process.env.DYNAMODB_PROGRAM_SESSIONS_TABLE || "library-analytics-program-sessions-dev";
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const startYM = sixMonthsAgo.toISOString().slice(0, 7);
+    const endYM = new Date().toISOString().slice(0, 7);
+
+    const [monthlyResp, sessionsResp] = await Promise.all([
+      dynamoDb.send(new ScanCommand({
+        TableName: programmingTable,
+        FilterExpression: "year_month BETWEEN :start AND :end",
+        ExpressionAttributeValues: { ":start": startYM, ":end": endYM },
+      })),
+      dynamoDb.send(new ScanCommand({
+        TableName: sessionsTable,
+        FilterExpression: "program_date >= :start",
+        ExpressionAttributeValues: { ":start": sixMonthsAgo.toISOString().slice(0, 10) },
+      })),
+    ]);
+
+    const monthlyItems = monthlyResp.Items || [];
+    const sessionItems = sessionsResp.Items || [];
+    programmingContext = `Monthly programming aggregates (${monthlyItems.length} records, ${startYM} to ${endYM}):\n${JSON.stringify(monthlyItems, null, 2)}\n\nIndividual program sessions (${sessionItems.length} records):\n${JSON.stringify(sessionItems, null, 2)}`;
+  } catch (err) {
+    logger.warn({ err }, "Failed to fetch programming data for question context");
+  }
+
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const message = await client.messages.create({
     model: process.env.CLAUDE_MODEL || "claude-haiku-4-5-20251001",
     max_tokens: 1024,
     system: "You are a library analytics assistant helping staff understand their circulation and programming data. Be concise, data-driven, and helpful.",
-    messages: [{ role: "user", content: `Question: ${query}\n\nLibrary Circulation Data:\n${circulationContext}` }],
+    messages: [{ role: "user", content: `Question: ${query}\n\nLibrary Circulation Data:\n${circulationContext}\n\nLibrary Programming Data:\n${programmingContext}` }],
   });
 
   const responseText = message.content[0].type === "text" ? message.content[0].text : "";
@@ -511,7 +541,7 @@ export async function answerQuestion(query: string): Promise<Answer> {
     questionId,
     response: responseText,
     confidence: 0.9,
-    sources: ["circulation_data"],
+    sources: ["circulation_data", "programming_data", "program_sessions"],
     metadata: {
       model: message.model,
       processingTime: Date.now() - start,
