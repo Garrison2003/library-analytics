@@ -55,6 +55,8 @@ resource "aws_iam_role_policy" "mcp_server_lambda" {
         Resource = [
           aws_dynamodb_table.programming_data.arn,
           "${aws_dynamodb_table.programming_data.arn}/index/*",
+          aws_dynamodb_table.program_sessions.arn,
+          "${aws_dynamodb_table.program_sessions.arn}/index/*",
         ]
       },
       {
@@ -85,8 +87,9 @@ resource "aws_lambda_function" "mcp_server" {
       CIRCULATION_BUCKET           = aws_s3_bucket.circulation.id
       CIRCULATION_PREFIX           = "processed/"
       CIRCULATION_FILE             = "circulation_data.json"
-      DYNAMODB_PROGRAMMING_TABLE   = aws_dynamodb_table.programming_data.name
-      NODE_OPTIONS                 = "--enable-source-maps"
+      DYNAMODB_PROGRAMMING_TABLE        = aws_dynamodb_table.programming_data.name
+      DYNAMODB_PROGRAM_SESSIONS_TABLE   = aws_dynamodb_table.program_sessions.name
+      NODE_OPTIONS                      = "--enable-source-maps"
     }
   }
 
