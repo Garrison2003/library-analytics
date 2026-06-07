@@ -85,9 +85,9 @@ describe("tools/list", () => {
     server = createServer();
   });
 
-  it("returns all five tools", async () => {
+  it("returns all nine tools", async () => {
     const result = await listTools(server);
-    expect(result.tools).toHaveLength(5);
+    expect(result.tools).toHaveLength(9);
   });
 
   it("includes get_circulation_data", async () => {
