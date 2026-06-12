@@ -488,9 +488,8 @@ export async function answerQuestion(query: string): Promise<Answer> {
     if (rawData) {
       const parsed = JSON.parse(rawData);
       const months: unknown[] = parsed.months || [];
-      const recentMonths = months.slice(-6);
       const branches = months.length > 0 ? Object.keys((months[0] as Record<string, unknown>).branches as Record<string, unknown> || {}) : [];
-      circulationContext = `Branches tracked: ${branches.join(", ")}\n\nMost recent 6 months of data:\n${JSON.stringify(recentMonths, null, 2)}`;
+      circulationContext = `Branches tracked: ${branches.join(", ")}\n\nAll available circulation data (${months.length} months):\n${JSON.stringify(months, null, 2)}`;
     }
   } catch (err) {
     logger.warn({ err }, "Failed to fetch circulation data for question context");
@@ -501,31 +500,18 @@ export async function answerQuestion(query: string): Promise<Answer> {
   try {
     const programmingTable = process.env.DYNAMODB_PROGRAMMING_TABLE || "library-analytics-programming-data-dev";
     const sessionsTable = process.env.DYNAMODB_PROGRAM_SESSIONS_TABLE || "library-analytics-program-sessions-dev";
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-    const startYM = sixMonthsAgo.toISOString().slice(0, 7);
-    const endYM = new Date().toISOString().slice(0, 7);
-
     const [monthlyResp, sessionsResp] = await Promise.all([
-      dynamoDb.send(new ScanCommand({
-        TableName: programmingTable,
-        FilterExpression: "year_month BETWEEN :start AND :end",
-        ExpressionAttributeValues: { ":start": startYM, ":end": endYM },
-      })),
-      dynamoDb.send(new ScanCommand({
-        TableName: sessionsTable,
-        FilterExpression: "program_date >= :start",
-        ExpressionAttributeValues: { ":start": sixMonthsAgo.toISOString().slice(0, 10) },
-      })),
+      dynamoDb.send(new ScanCommand({ TableName: programmingTable })),
+      dynamoDb.send(new ScanCommand({ TableName: sessionsTable })),
     ]);
 
     const monthlyItems = monthlyResp.Items || [];
     const sessionItems = sessionsResp.Items || [];
 
     if (monthlyItems.length === 0 && sessionItems.length === 0) {
-      programmingContext = `Programming tables are accessible but contain no data for ${startYM} to ${endYM}. No programming files have been uploaded yet for this period.`;
+      programmingContext = `Programming tables are accessible but contain no data. No programming files have been uploaded yet.`;
     } else {
-      programmingContext = `Monthly programming aggregates (${monthlyItems.length} records, ${startYM} to ${endYM}):\n${JSON.stringify(monthlyItems, null, 2)}\n\nIndividual program sessions (${sessionItems.length} records):\n${JSON.stringify(sessionItems, null, 2)}`;
+      programmingContext = `Monthly programming aggregates (${monthlyItems.length} records):\n${JSON.stringify(monthlyItems, null, 2)}\n\nIndividual program sessions (${sessionItems.length} records):\n${JSON.stringify(sessionItems, null, 2)}`;
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
