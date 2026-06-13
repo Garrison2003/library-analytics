@@ -136,6 +136,45 @@ export interface FileValidationResult {
 }
 
 // ============================================================================
+// PROGRAMMING SESSION TYPES
+// ============================================================================
+
+export interface ProgramSession {
+  program_date: string;
+  program_name: string;
+  primary_facilitator: string;
+  branch_code: string;
+  branch_name: string;
+  total_attendance: number;
+  num_programs: number;
+  report_type: string;
+  outreach_site: string;
+}
+
+export interface ProgramSessionFilters {
+  branch?: string;
+  facilitator?: string;
+  programName?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  reportType?: string;
+}
+
+export interface ProgramSessionsResponse {
+  sessions: ProgramSession[];
+  count: number;
+  filters: {
+    branch?: string | null;
+    facilitator?: string | null;
+    program_name?: string | null;
+    date_from?: string | null;
+    date_to?: string | null;
+    report_type?: string | null;
+  };
+  message?: string;
+}
+
+// ============================================================================
 // MCP SERVER & AI TYPES
 // ============================================================================
 

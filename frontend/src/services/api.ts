@@ -7,6 +7,8 @@ import type {
   FileUploadResponse,
   Question,
   Answer,
+  ProgramSessionFilters,
+  ProgramSessionsResponse,
 } from "../types/index";
 
 class APIService {
@@ -80,6 +82,21 @@ class APIService {
   async getProgrammingData(branch: string, months: number = 12): Promise<APIResponse<any>> {
     const params = new URLSearchParams({ branch, months: String(months) });
     return this.request<any>(`/programming/history?${params.toString()}`);
+  }
+
+  async getProgrammingSessions(
+    filters: ProgramSessionFilters,
+  ): Promise<APIResponse<ProgramSessionsResponse>> {
+    const params = new URLSearchParams();
+    if (filters.branch) params.append("branch", filters.branch);
+    if (filters.facilitator) params.append("facilitator", filters.facilitator);
+    if (filters.programName) params.append("program_name", filters.programName);
+    if (filters.dateFrom) params.append("date_from", filters.dateFrom);
+    if (filters.dateTo) params.append("date_to", filters.dateTo);
+    if (filters.reportType) params.append("report_type", filters.reportType);
+    return this.request<ProgramSessionsResponse>(
+      `/programming/sessions?${params.toString()}`,
+    );
   }
 
   async getMonthlyAnalytics(

@@ -11,6 +11,12 @@ vi.mock("../components/ProgrammingCharts", () => ({
   ),
 }));
 
+vi.mock("../components/ProgrammingQuery", () => ({
+  default: ({ branches }: { branches: string[] }) => (
+    <div data-testid="mock-programming-query" data-branch-count={branches.length} />
+  ),
+}));
+
 vi.mock("../components/BranchSelector", () => ({
   default: ({
     branches,
@@ -107,6 +113,20 @@ describe("Programming Page", () => {
     mockFetchBranches([]);
     render(<Programming />);
     expect(screen.getByTestId("mock-programming-charts")).toBeInTheDocument();
+  });
+
+  it("renders the Query Sessions section heading", () => {
+    mockFetchBranches([]);
+    render(<Programming />);
+    expect(
+      screen.getByRole("heading", { name: "Query Sessions", level: 2 }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the ProgrammingQuery component", () => {
+    mockFetchBranches([]);
+    render(<Programming />);
+    expect(screen.getByTestId("mock-programming-query")).toBeInTheDocument();
   });
 
   // ── Branch fetching ──────────────────────────────────────────────────────────
