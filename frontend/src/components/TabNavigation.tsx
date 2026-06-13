@@ -1,7 +1,7 @@
 // src/components/TabNavigation.tsx
 import React from "react";
 
-export type TabId = "dashboard" | "monthly" | "daily" | "upload";
+export type TabId = "dashboard" | "monthly" | "daily" | "programming" | "upload";
 
 interface Tab {
   id: TabId;
@@ -17,6 +17,7 @@ const tabs: Tab[] = [
   { id: "dashboard", label: "Dashboard" },
   { id: "monthly", label: "Monthly View" },
   { id: "daily", label: "Daily View" },
+  { id: "programming", label: "Programming" },
   { id: "upload", label: "Upload" },
 ];
 

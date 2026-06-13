@@ -5,11 +5,12 @@ import TabNavigation from "./TabNavigation";
 import type { TabId } from "./TabNavigation";
 
 describe("TabNavigation Component", () => {
-  it("renders all four tab labels", () => {
+  it("renders all five tab labels", () => {
     render(<TabNavigation activeTab="dashboard" onTabChange={vi.fn()} />);
     expect(screen.getByText("Dashboard")).toBeInTheDocument();
     expect(screen.getByText("Monthly View")).toBeInTheDocument();
     expect(screen.getByText("Daily View")).toBeInTheDocument();
+    expect(screen.getByText("Programming")).toBeInTheDocument();
     expect(screen.getByText("Upload")).toBeInTheDocument();
   });
 
@@ -27,6 +28,14 @@ describe("TabNavigation Component", () => {
     render(<TabNavigation activeTab="dashboard" onTabChange={onTabChange} />);
     await user.click(screen.getByText("Daily View"));
     expect(onTabChange).toHaveBeenCalledWith("daily" satisfies TabId);
+  });
+
+  it("calls onTabChange with 'programming' when Programming is clicked", async () => {
+    const user = userEvent.setup();
+    const onTabChange = vi.fn();
+    render(<TabNavigation activeTab="dashboard" onTabChange={onTabChange} />);
+    await user.click(screen.getByText("Programming"));
+    expect(onTabChange).toHaveBeenCalledWith("programming" satisfies TabId);
   });
 
   it("calls onTabChange with 'upload' when Upload is clicked", async () => {
@@ -64,6 +73,15 @@ describe("TabNavigation Component", () => {
     expect(dashboardBtn.contains(indicator)).toBe(true);
   });
 
+  it("shows active indicator under Programming when programming is active", () => {
+    const { container } = render(
+      <TabNavigation activeTab="programming" onTabChange={vi.fn()} />,
+    );
+    const indicator = container.querySelector("span.bg-blue-600");
+    const programmingBtn = screen.getByText("Programming").closest("button")!;
+    expect(programmingBtn.contains(indicator)).toBe(true);
+  });
+
   it("shows active indicator under Upload when upload is active", () => {
     const { container } = render(
       <TabNavigation activeTab="upload" onTabChange={vi.fn()} />,
@@ -73,9 +91,9 @@ describe("TabNavigation Component", () => {
     expect(uploadBtn.contains(indicator)).toBe(true);
   });
 
-  it("renders exactly four buttons", () => {
+  it("renders exactly five buttons", () => {
     render(<TabNavigation activeTab="dashboard" onTabChange={vi.fn()} />);
-    expect(screen.getAllByRole("button")).toHaveLength(4);
+    expect(screen.getAllByRole("button")).toHaveLength(5);
   });
 
   it("only one indicator is visible at a time", () => {

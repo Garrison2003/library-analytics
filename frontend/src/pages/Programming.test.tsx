@@ -1,13 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
-import Homepage from "./Homepage";
+import Programming from "./Programming";
 
-// Mock API-fetching child components to isolate Homepage logic
-vi.mock("../components/CirculationTrends", () => ({
+vi.mock("../components/ProgrammingCharts", () => ({
   default: ({ selectedBranch }: { selectedBranch?: string }) => (
-    <div data-testid="mock-circulation-trends" data-branch={selectedBranch}>
-      <span>Juvenile Fiction</span>
-      <span>Total Circulation</span>
+    <div data-testid="mock-programming-charts" data-branch={selectedBranch}>
+      <span>In-Person Attendance</span>
+      <span>Total Programs</span>
     </div>
   ),
 }));
@@ -34,12 +33,11 @@ vi.mock("../components/BranchSelector", () => ({
 vi.mock("../services/api", () => ({
   apiClient: {
     getCirculationData: vi.fn(),
+    askQuestion: vi.fn(),
   },
 }));
 
 import { apiClient } from "../services/api";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function mockFetchBranches(branches: string[]) {
   vi.mocked(apiClient.getCirculationData).mockResolvedValue({
@@ -62,9 +60,7 @@ function mockFetchFail() {
   );
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
-describe("Homepage Component", () => {
+describe("Programming Page", () => {
   beforeEach(() => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -75,59 +71,55 @@ describe("Homepage Component", () => {
     vi.restoreAllMocks();
   });
 
-  // ── Static layout ──────────────────────────────────────────────────────────
+  // ── Static layout ────────────────────────────────────────────────────────────
 
-  it("renders the hero welcome message", () => {
+  it("renders the Programming hero heading", () => {
     mockFetchBranches([]);
-    render(<Homepage />);
-    expect(screen.getByText("Welcome to Library Analytics")).toBeInTheDocument();
+    render(<Programming />);
+    expect(
+      screen.getByRole("heading", { name: "Programming", level: 1 }),
+    ).toBeInTheDocument();
   });
 
   it("renders the hero subtitle", () => {
     mockFetchBranches([]);
-    render(<Homepage />);
+    render(<Programming />);
     expect(
-      screen.getByText(/Analyze your library's performance/i),
+      screen.getByText(/Explore programming attendance and event totals/i),
     ).toBeInTheDocument();
-  });
-
-  it("renders the At a Glance section heading", () => {
-    mockFetchBranches([]);
-    render(<Homepage />);
-    expect(screen.getByText("At a Glance")).toBeInTheDocument();
   });
 
   it("renders the Questions section heading", () => {
     mockFetchBranches([]);
-    render(<Homepage />);
-    expect(screen.getByText("Questions")).toBeInTheDocument();
+    render(<Programming />);
+    expect(
+      screen.getByRole("heading", { name: "Questions", level: 2 }),
+    ).toBeInTheDocument();
   });
 
-  it("renders the questions input textarea", () => {
+  it("renders the questions textarea", () => {
     mockFetchBranches([]);
-    render(<Homepage />);
+    render(<Programming />);
     expect(screen.getByRole("textbox")).toBeInTheDocument();
   });
 
-  it("renders the CirculationTrends component inside At a Glance", () => {
+  it("renders the ProgrammingCharts component", () => {
     mockFetchBranches([]);
-    render(<Homepage />);
-    expect(screen.getByTestId("mock-circulation-trends")).toBeInTheDocument();
+    render(<Programming />);
+    expect(screen.getByTestId("mock-programming-charts")).toBeInTheDocument();
   });
 
-  // ── Branch fetching ────────────────────────────────────────────────────────
+  // ── Branch fetching ──────────────────────────────────────────────────────────
 
   it("shows loading state for branch selector on mount", () => {
-    vi.mocked(apiClient.getCirculationData).mockReturnValue(
-      new Promise(() => {}),
-    );
-    render(<Homepage />);
+    vi.mocked(apiClient.getCirculationData).mockReturnValue(new Promise(() => {}));
+    render(<Programming />);
     expect(screen.getByTestId("branch-loading")).toBeInTheDocument();
   });
 
   it("fetches branches from the circulation endpoint", async () => {
-    mockFetchBranches(["Imaginon", "Main", "Plaza Midwood"]);
-    render(<Homepage />);
+    mockFetchBranches(["Imaginon", "Main"]);
+    render(<Programming />);
     await waitFor(() => {
       expect(apiClient.getCirculationData).toHaveBeenCalled();
     });
@@ -135,7 +127,7 @@ describe("Homepage Component", () => {
 
   it("populates BranchSelector with fetched branches", async () => {
     mockFetchBranches(["Imaginon", "Main"]);
-    render(<Homepage />);
+    render(<Programming />);
     await waitFor(() =>
       expect(screen.getByTestId("branch-count").textContent).toBe("2"),
     );
@@ -143,17 +135,15 @@ describe("Homepage Component", () => {
 
   it("defaults to the first branch when branches are available", async () => {
     mockFetchBranches(["Imaginon", "Main", "Plaza Midwood"]);
-    render(<Homepage />);
+    render(<Programming />);
     await waitFor(() =>
-      expect(screen.getByTestId("selected-branch").textContent).toBe(
-        "Imaginon",
-      ),
+      expect(screen.getByTestId("selected-branch").textContent).toBe("Imaginon"),
     );
   });
 
   it("defaults to System when branch list is empty", async () => {
     mockFetchBranches([]);
-    render(<Homepage />);
+    render(<Programming />);
     await waitFor(() =>
       expect(screen.getByTestId("selected-branch").textContent).toBe("System"),
     );
@@ -161,7 +151,7 @@ describe("Homepage Component", () => {
 
   it("defaults to System when fetch fails", async () => {
     mockFetchFail();
-    render(<Homepage />);
+    render(<Programming />);
     await waitFor(() =>
       expect(screen.getByTestId("selected-branch").textContent).toBe("System"),
     );
@@ -169,29 +159,27 @@ describe("Homepage Component", () => {
 
   it("resolves loading state even when API call fails", async () => {
     mockFetchFail();
-    render(<Homepage />);
+    render(<Programming />);
     await waitFor(() =>
       expect(screen.queryByTestId("branch-loading")).not.toBeInTheDocument(),
     );
   });
 
-  it("passes selectedBranch to CirculationTrends", async () => {
+  it("passes selectedBranch to ProgrammingCharts", async () => {
     mockFetchBranches(["Imaginon"]);
-    render(<Homepage />);
+    render(<Programming />);
     await waitFor(() =>
       expect(
-        screen.getByTestId("mock-circulation-trends").dataset.branch,
+        screen.getByTestId("mock-programming-charts").dataset.branch,
       ).toBe("Imaginon"),
     );
   });
 
-  it("shows circulation subtitle with selected branch name", async () => {
+  it("shows programming section heading with selected branch name", async () => {
     mockFetchBranches(["Main"]);
-    render(<Homepage />);
+    render(<Programming />);
     await waitFor(() =>
-      expect(
-        screen.getByText(/Circulation trends for Main/i),
-      ).toBeInTheDocument(),
+      expect(screen.getByText(/Programming for Main/i)).toBeInTheDocument(),
     );
   });
 });
