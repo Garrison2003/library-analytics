@@ -202,6 +202,33 @@ def get_branch_history(branch_code: str, months: int = 12) -> Optional[Dict]:
         return None
 
 
+def get_facilitators(branch_codes: list) -> list:
+    """Return sorted unique primary_facilitator values for the given branch codes."""
+    sessions_table_name = _env("PROGRAM_SESSIONS_TABLE", "program-sessions")
+    names: set = set()
+    try:
+        table = dynamodb.Table(sessions_table_name)
+        for code in branch_codes:
+            kw: dict = {
+                "KeyConditionExpression": "branch_code = :bcode",
+                "ExpressionAttributeValues": {":bcode": code},
+                "ProjectionExpression": "primary_facilitator",
+            }
+            while True:
+                resp = table.query(**kw)
+                for item in resp.get("Items", []):
+                    name = (item.get("primary_facilitator") or "").strip()
+                    if name:
+                        names.add(name)
+                lek = resp.get("LastEvaluatedKey")
+                if not lek:
+                    break
+                kw["ExclusiveStartKey"] = lek
+    except Exception as exc:
+        logger.error("get_facilitators error: %s", exc)
+    return sorted(names)
+
+
 def get_sessions(
     branch: Optional[str] = None,
     facilitator: Optional[str] = None,
@@ -516,8 +543,17 @@ def lambda_handler(event, context):
         
         logger.info("Path: %s, Params: %s", path, query_params)
         
+        # Route: /programming/facilitators  (distinct facilitators for a branch)
+        if "/programming/facilitators" in path:
+            branch_raw = (query_params.get("branch", "") or "").upper()
+            if not branch_raw:
+                return _api_err(400, "MISSING_PARAMETER", "branch parameter is required")
+            branch_codes = BRANCH_DEPARTMENTS.get(branch_raw, [branch_raw])
+            facilitators = get_facilitators(branch_codes)
+            return _api_ok({"facilitators": facilitators, "branch": branch_raw, "count": len(facilitators)})
+
         # Route: /programming/sessions  (per-session query)
-        if "/programming/sessions" in path:
+        elif "/programming/sessions" in path:
             branch_raw = (query_params.get("branch", "") or "").upper() or None
             facilitator = query_params.get("facilitator") or None
             prog_name = query_params.get("program_name") or None
@@ -540,7 +576,7 @@ def lambda_handler(event, context):
             return _api_err(500, "INTERNAL_ERROR", "Failed to query sessions")
 
         # Route: /programming/history?branch=IMG&months=12
-        elif "/programming/history" in path:
+        elif "/programming/history" in path:  # noqa: RET505
             branch_code = query_params.get("branch", "").upper()
             months = int(query_params.get("months", 12))
             

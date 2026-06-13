@@ -15,6 +15,7 @@ from programming_history_api_lambda import (
     get_branch_history,
     compare_branches,
     get_sessions,
+    get_facilitators,
     lambda_handler,
 )
 
@@ -587,3 +588,160 @@ class TestLambdaHandlerSessions:
         with patch("programming_history_api_lambda.get_sessions", return_value=None):
             resp = lambda_handler(_sessions_event(branch="MAI"), None)
         assert resp["statusCode"] == 500
+
+
+# ── TestGetFacilitators ────────────────────────────────────────────────────────
+
+
+def _make_facilitators_table(mock_dynamodb, items=None):
+    table = MagicMock()
+    mock_dynamodb.Table.return_value = table
+    table.query.return_value = {"Items": items or []}
+    return table
+
+
+class TestGetFacilitators:
+    @pytest.fixture(autouse=True)
+    def setup(self, mock_dynamodb, monkeypatch):
+        monkeypatch.setenv("PROGRAM_SESSIONS_TABLE", "test-sessions-table")
+        self.mock_db = mock_dynamodb
+
+    def test_returns_sorted_unique_names(self):
+        items = [
+            {"primary_facilitator": "Zara Jones"},
+            {"primary_facilitator": "Alice Brown"},
+            {"primary_facilitator": "Zara Jones"},  # duplicate
+            {"primary_facilitator": "Bob Smith"},
+        ]
+        _make_facilitators_table(self.mock_db, items=items)
+        result = get_facilitators(["MAI"])
+        assert result == ["Alice Brown", "Bob Smith", "Zara Jones"]
+
+    def test_queries_each_branch_code(self):
+        table = _make_facilitators_table(self.mock_db, items=[])
+        get_facilitators(["SPA", "TEL"])
+        assert table.query.call_count == 2
+
+    def test_merges_facilitators_across_branches(self):
+        table = MagicMock()
+        self.mock_db.Table.return_value = table
+        table.query.side_effect = [
+            {"Items": [{"primary_facilitator": "Alice"}]},
+            {"Items": [{"primary_facilitator": "Bob"}]},
+        ]
+        result = get_facilitators(["SPA", "TEL"])
+        assert result == ["Alice", "Bob"]
+
+    def test_deduplicates_across_branches(self):
+        table = MagicMock()
+        self.mock_db.Table.return_value = table
+        table.query.side_effect = [
+            {"Items": [{"primary_facilitator": "Alice"}]},
+            {"Items": [{"primary_facilitator": "Alice"}]},
+        ]
+        result = get_facilitators(["SPA", "TEL"])
+        assert result == ["Alice"]
+
+    def test_skips_empty_facilitator_strings(self):
+        items = [
+            {"primary_facilitator": ""},
+            {"primary_facilitator": "   "},
+            {"primary_facilitator": "Valid Name"},
+        ]
+        _make_facilitators_table(self.mock_db, items=items)
+        result = get_facilitators(["MAI"])
+        assert result == ["Valid Name"]
+
+    def test_skips_items_missing_facilitator_key(self):
+        items = [{"branch_code": "MAI"}, {"primary_facilitator": "Alice"}]
+        _make_facilitators_table(self.mock_db, items=items)
+        result = get_facilitators(["MAI"])
+        assert result == ["Alice"]
+
+    def test_paginates_with_last_evaluated_key(self):
+        table = MagicMock()
+        self.mock_db.Table.return_value = table
+        table.query.side_effect = [
+            {"Items": [{"primary_facilitator": "Alice"}], "LastEvaluatedKey": {"pk": "x"}},
+            {"Items": [{"primary_facilitator": "Bob"}]},
+        ]
+        result = get_facilitators(["MAI"])
+        assert result == ["Alice", "Bob"]
+        assert table.query.call_count == 2
+
+    def test_returns_empty_list_on_exception(self):
+        table = _make_facilitators_table(self.mock_db)
+        table.query.side_effect = Exception("DynamoDB error")
+        result = get_facilitators(["MAI"])
+        assert result == []
+
+    def test_returns_empty_list_for_no_items(self):
+        _make_facilitators_table(self.mock_db, items=[])
+        result = get_facilitators(["MAI"])
+        assert result == []
+
+
+# ── TestLambdaHandlerFacilitators ─────────────────────────────────────────────
+
+
+def _facilitators_event(branch="MAI"):
+    return {
+        "httpMethod": "GET",
+        "path": "/programming/facilitators",
+        "queryStringParameters": {"branch": branch},
+        "headers": {"Authorization": "Bearer test"},
+    }
+
+
+class TestLambdaHandlerFacilitators:
+    @pytest.fixture(autouse=True)
+    def setup(self, mock_dynamodb, monkeypatch):
+        monkeypatch.setenv("DYNAMODB_TABLE", "test-table")
+        monkeypatch.setenv("PROGRAM_SESSIONS_TABLE", "test-sessions-table")
+        self.table = _make_facilitators_table(mock_dynamodb, items=[])
+
+    def test_routes_facilitators_path(self):
+        with patch("programming_history_api_lambda.get_facilitators") as mock_fn:
+            mock_fn.return_value = []
+            lambda_handler(_facilitators_event(branch="MAI"), None)
+        mock_fn.assert_called_once()
+
+    def test_expands_img_to_spa_and_tel(self):
+        with patch("programming_history_api_lambda.get_facilitators") as mock_fn:
+            mock_fn.return_value = []
+            lambda_handler(_facilitators_event(branch="IMG"), None)
+        called_codes = mock_fn.call_args.args[0]
+        assert "SPA" in called_codes
+        assert "TEL" in called_codes
+
+    def test_non_department_branch_passes_single_code(self):
+        with patch("programming_history_api_lambda.get_facilitators") as mock_fn:
+            mock_fn.return_value = []
+            lambda_handler(_facilitators_event(branch="MAI"), None)
+        called_codes = mock_fn.call_args.args[0]
+        assert called_codes == ["MAI"]
+
+    def test_returns_200_with_facilitators_list(self):
+        with patch("programming_history_api_lambda.get_facilitators", return_value=["Alice", "Bob"]):
+            resp = lambda_handler(_facilitators_event(branch="MAI"), None)
+        assert resp["statusCode"] == 200
+        body = json.loads(resp["body"])
+        assert body["data"]["facilitators"] == ["Alice", "Bob"]
+        assert body["data"]["count"] == 2
+
+    def test_returns_400_when_branch_missing(self):
+        event = {
+            "httpMethod": "GET",
+            "path": "/programming/facilitators",
+            "queryStringParameters": {},
+            "headers": {},
+        }
+        resp = lambda_handler(event, None)
+        assert resp["statusCode"] == 400
+
+    def test_uppercases_branch_param(self):
+        with patch("programming_history_api_lambda.get_facilitators") as mock_fn:
+            mock_fn.return_value = []
+            lambda_handler(_facilitators_event(branch="mai"), None)
+        called_codes = mock_fn.call_args.args[0]
+        assert called_codes == ["MAI"]

@@ -96,7 +96,7 @@ const Programming: React.FC = () => {
             Search individual program sessions by branch, facilitator, program
             name, date range, or report type.
           </p>
-          <ProgrammingQuery branches={branches} />
+          <ProgrammingQuery branches={branches} selectedBranch={selectedBranch} />
         </div>
       </section>
 

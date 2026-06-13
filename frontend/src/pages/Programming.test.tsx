@@ -12,8 +12,18 @@ vi.mock("../components/ProgrammingCharts", () => ({
 }));
 
 vi.mock("../components/ProgrammingQuery", () => ({
-  default: ({ branches }: { branches: string[] }) => (
-    <div data-testid="mock-programming-query" data-branch-count={branches.length} />
+  default: ({
+    branches,
+    selectedBranch,
+  }: {
+    branches: string[];
+    selectedBranch: string;
+  }) => (
+    <div
+      data-testid="mock-programming-query"
+      data-branch-count={branches.length}
+      data-selected-branch={selectedBranch}
+    />
   ),
 }));
 

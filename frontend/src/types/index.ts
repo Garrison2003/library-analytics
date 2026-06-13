@@ -174,6 +174,12 @@ export interface ProgramSessionsResponse {
   message?: string;
 }
 
+export interface FacilitatorsResponse {
+  facilitators: string[];
+  branch: string;
+  count: number;
+}
+
 // ============================================================================
 // MCP SERVER & AI TYPES
 // ============================================================================

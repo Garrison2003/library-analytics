@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { apiClient } from "../services/api";
 import type { ProgramSession, ProgramSessionFilters } from "../types/index";
 
@@ -42,11 +42,20 @@ const BRANCH_NAME_TO_CODE: Record<string, string> = {
 
 interface ProgrammingQueryProps {
   branches: string[];
+  selectedBranch: string;
 }
 
-const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({ branches }) => {
-  const [selectedBranch, setSelectedBranch] = useState<string>("");
-  const [facilitator, setFacilitator] = useState<string>("");
+const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({
+  branches,
+  selectedBranch,
+}) => {
+  const [internalBranch, setInternalBranch] = useState<string>(selectedBranch);
+  const [facilitatorList, setFacilitatorList] = useState<string[]>([]);
+  const [loadingFacilitators, setLoadingFacilitators] =
+    useState<boolean>(false);
+  const [selectedFacilitators, setSelectedFacilitators] = useState<string[]>(
+    [],
+  );
   const [programName, setProgramName] = useState<string>("");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
@@ -58,11 +67,56 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({ branches }) => {
   const [error, setError] = useState<string | null>(null);
   const [hasQueried, setHasQueried] = useState<boolean>(false);
 
-  const canSubmit = !!(
-    selectedBranch ||
-    facilitator.trim() ||
-    programName.trim()
-  );
+  const canSubmit = !!(internalBranch || programName.trim());
+
+  const fetchFacilitators = useCallback(async (branchCode: string) => {
+    setLoadingFacilitators(true);
+    try {
+      const result = await apiClient.getProgrammingFacilitators(branchCode);
+      if (result.success && result.data) {
+        setFacilitatorList(result.data.facilitators);
+      } else {
+        setFacilitatorList([]);
+      }
+    } catch {
+      setFacilitatorList([]);
+    } finally {
+      setLoadingFacilitators(false);
+    }
+  }, []);
+
+  // Sync branch from page-level selector
+  useEffect(() => {
+    setInternalBranch(selectedBranch);
+    setSelectedFacilitators([]);
+    setSessions(null);
+    setHasQueried(false);
+    const code = BRANCH_NAME_TO_CODE[selectedBranch];
+    if (code) {
+      fetchFacilitators(code);
+    } else {
+      setFacilitatorList([]);
+    }
+  }, [selectedBranch, fetchFacilitators]);
+
+  const handleBranchChange = (branch: string) => {
+    setInternalBranch(branch);
+    setSelectedFacilitators([]);
+    setSessions(null);
+    setHasQueried(false);
+    const code = BRANCH_NAME_TO_CODE[branch];
+    if (code) {
+      fetchFacilitators(code);
+    } else {
+      setFacilitatorList([]);
+    }
+  };
+
+  const toggleFacilitator = (name: string) => {
+    setSelectedFacilitators((prev) =>
+      prev.includes(name) ? prev.filter((f) => f !== name) : [...prev, name],
+    );
+  };
 
   const handleSearch = async () => {
     if (!canSubmit) return;
@@ -70,13 +124,12 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({ branches }) => {
     setError(null);
     setHasQueried(true);
 
-    const branchCode = selectedBranch
-      ? BRANCH_NAME_TO_CODE[selectedBranch]
+    const branchCode = internalBranch
+      ? BRANCH_NAME_TO_CODE[internalBranch]
       : undefined;
 
-    const filters: ProgramSessionFilters = {
+    const baseFilters: ProgramSessionFilters = {
       branch: branchCode,
-      facilitator: facilitator.trim() || undefined,
       programName: programName.trim() || undefined,
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
@@ -84,13 +137,42 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({ branches }) => {
     };
 
     try {
-      const result = await apiClient.getProgrammingSessions(filters);
-      if (result.success && result.data) {
-        setSessions(result.data.sessions);
-        setTotal(result.data.count);
+      if (selectedFacilitators.length > 1) {
+        // Parallel query per facilitator, merge + deduplicate results
+        const results = await Promise.all(
+          selectedFacilitators.map((f) =>
+            apiClient.getProgrammingSessions({ ...baseFilters, facilitator: f }),
+          ),
+        );
+        const seen = new Set<string>();
+        const merged: ProgramSession[] = [];
+        for (const result of results) {
+          if (result.success && result.data) {
+            for (const s of result.data.sessions) {
+              const key = `${s.program_date}|${s.program_name}|${s.primary_facilitator}|${s.branch_code}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                merged.push(s);
+              }
+            }
+          }
+        }
+        merged.sort((a, b) => b.program_date.localeCompare(a.program_date));
+        setSessions(merged);
+        setTotal(merged.length);
       } else {
-        setError(result.error?.message ?? "Query failed");
-        setSessions([]);
+        const filters: ProgramSessionFilters = {
+          ...baseFilters,
+          facilitator: selectedFacilitators[0] || undefined,
+        };
+        const result = await apiClient.getProgrammingSessions(filters);
+        if (result.success && result.data) {
+          setSessions(result.data.sessions);
+          setTotal(result.data.count);
+        } else {
+          setError(result.error?.message ?? "Query failed");
+          setSessions([]);
+        }
       }
     } catch {
       setError("Failed to load session data. Please try again.");
@@ -101,8 +183,7 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({ branches }) => {
   };
 
   const handleClear = () => {
-    setSelectedBranch("");
-    setFacilitator("");
+    setSelectedFacilitators([]);
     setProgramName("");
     setDateFrom("");
     setDateTo("");
@@ -131,8 +212,8 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({ branches }) => {
             <label className={labelClass}>Branch</label>
             <select
               className={inputClass}
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
+              value={internalBranch}
+              onChange={(e) => handleBranchChange(e.target.value)}
             >
               <option value="">All Branches</option>
               {branches.map((b) => (
@@ -143,17 +224,63 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({ branches }) => {
             </select>
           </div>
 
-          {/* Facilitator */}
+          {/* Facilitator multi-select */}
           <div>
-            <label className={labelClass}>Facilitator</label>
-            <input
-              type="text"
-              className={inputClass}
-              value={facilitator}
-              onChange={(e) => setFacilitator(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Exact name, e.g. Jane Smith"
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className={labelClass.replace(" mb-1", "")}>
+                Facilitator
+                {selectedFacilitators.length > 0 && (
+                  <span className="ml-2 text-xs font-normal text-blue-600">
+                    {selectedFacilitators.length} selected
+                  </span>
+                )}
+              </label>
+              {facilitatorList.length > 0 && (
+                <div className="flex gap-2 text-xs text-blue-600">
+                  <button
+                    type="button"
+                    className="hover:underline"
+                    onClick={() => setSelectedFacilitators([...facilitatorList])}
+                  >
+                    All
+                  </button>
+                  <span className="text-gray-300">|</span>
+                  <button
+                    type="button"
+                    className="hover:underline"
+                    onClick={() => setSelectedFacilitators([])}
+                  >
+                    None
+                  </button>
+                </div>
+              )}
+            </div>
+            {loadingFacilitators ? (
+              <div className="border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-400 h-10 flex items-center">
+                Loading…
+              </div>
+            ) : facilitatorList.length === 0 ? (
+              <div className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-400 h-10 flex items-center">
+                {internalBranch ? "No facilitators found" : "Select a branch"}
+              </div>
+            ) : (
+              <div className="border border-gray-300 rounded-md overflow-y-auto max-h-40">
+                {facilitatorList.map((f) => (
+                  <label
+                    key={f}
+                    className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-gray-50 select-none"
+                  >
+                    <input
+                      type="checkbox"
+                      className="accent-blue-600"
+                      checked={selectedFacilitators.includes(f)}
+                      onChange={() => toggleFacilitator(f)}
+                    />
+                    <span className="text-sm text-gray-700">{f}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Program Name */}
@@ -222,7 +349,7 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({ branches }) => {
           </button>
           {!canSubmit && (
             <p className="text-sm text-amber-600">
-              Select a branch, facilitator, or program name to search.
+              Select a branch or enter a program name to search.
             </p>
           )}
         </div>

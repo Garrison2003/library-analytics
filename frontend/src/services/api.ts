@@ -9,6 +9,7 @@ import type {
   Answer,
   ProgramSessionFilters,
   ProgramSessionsResponse,
+  FacilitatorsResponse,
 } from "../types/index";
 
 class APIService {
@@ -96,6 +97,14 @@ class APIService {
     if (filters.reportType) params.append("report_type", filters.reportType);
     return this.request<ProgramSessionsResponse>(
       `/programming/sessions?${params.toString()}`,
+    );
+  }
+
+  async getProgrammingFacilitators(
+    branchCode: string,
+  ): Promise<APIResponse<FacilitatorsResponse>> {
+    return this.request<FacilitatorsResponse>(
+      `/programming/facilitators?branch=${encodeURIComponent(branchCode)}`,
     );
   }
 
