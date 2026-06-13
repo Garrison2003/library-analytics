@@ -103,6 +103,35 @@ describe("ProgrammingCharts Component", () => {
     );
   });
 
+  it("displays months chronologically with the earliest on the left", async () => {
+    // Real API returns months newest-first; component should reverse them for display.
+    const newestFirst = [...YEAR_MONTHS].reverse(); // "2025-06", …, "2024-07"
+    vi.mocked(apiClient.getProgrammingData).mockResolvedValueOnce({
+      ...MOCK_RESPONSE,
+      data: {
+        ...MOCK_RESPONSE.data,
+        months: newestFirst,
+        attendance: newestFirst.map((_, i) => 100 * (i + 1)),
+        programs: newestFirst.map((_, i) => 10 * (i + 1)),
+      },
+    });
+
+    const { container } = render(<ProgrammingCharts selectedBranch="Spangler" />);
+
+    await waitFor(() => {
+      const svgs = container.querySelectorAll("svg");
+      expect(svgs.length).toBeGreaterThan(0);
+      const texts = Array.from(svgs[0].querySelectorAll("text"));
+      const monthLabels = texts
+        .map((t) => t.textContent || "")
+        .filter((t) => /^[A-Z][a-z]{2}\s+\d{2}$/.test(t));
+      expect(monthLabels.length).toBeGreaterThan(0);
+      // After reversal: Jul 24 (oldest) on the left, Jun 25 (newest) on the right
+      expect(monthLabels[0]).toMatch(/Jul.+24/);
+      expect(monthLabels[monthLabels.length - 1]).toMatch(/Jun.+25/);
+    });
+  });
+
   it("does not throw when months field is absent (dataFound: false response)", async () => {
     vi.mocked(apiClient.getProgrammingData).mockResolvedValueOnce({
       success: true,

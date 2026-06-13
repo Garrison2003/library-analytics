@@ -244,7 +244,12 @@ const ProgrammingCharts: React.FC<ProgrammingChartsProps> = ({
             const date = new Date(Number(year), Number(month) - 1, 1);
             return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
           });
-          setData({ ...raw, months: formattedMonths });
+          setData({
+            ...raw,
+            months: [...formattedMonths].reverse(),
+            attendance: [...(raw.attendance ?? [])].reverse(),
+            programs: [...(raw.programs ?? [])].reverse(),
+          });
         } else {
           setError(json.error?.message || "Failed to fetch data");
         }

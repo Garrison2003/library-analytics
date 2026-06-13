@@ -5,6 +5,7 @@ import { apiClient } from "./services/api";
 import Homepage from "./pages/Homepage";
 import MonthlyAnalytics from "./pages/MonthlyAnalytics";
 import DailyAnalytics from "./pages/DailyAnalytics";
+import Programming from "./pages/Programming";
 import Upload from "./components/Upload";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
@@ -80,6 +81,8 @@ function AppContent() {
         return (
           <DailyAnalytics onBackHome={() => handleTabChange("dashboard")} />
         );
+      case "programming":
+        return <Programming />;
       case "upload":
         return <Upload onBackHome={() => handleTabChange("dashboard")} />;
       case "dashboard":
