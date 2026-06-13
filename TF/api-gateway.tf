@@ -240,6 +240,16 @@ resource "aws_api_gateway_deployment" "circulation" {
       aws_api_gateway_integration.get_programming_compare.id,
       aws_api_gateway_method.options_programming_compare.id,
       aws_api_gateway_integration.options_programming_compare.id,
+      aws_api_gateway_resource.programming_sessions.id,
+      aws_api_gateway_method.get_programming_sessions.id,
+      aws_api_gateway_integration.get_programming_sessions.id,
+      aws_api_gateway_method.options_programming_sessions.id,
+      aws_api_gateway_integration.options_programming_sessions.id,
+      aws_api_gateway_resource.programming_facilitators.id,
+      aws_api_gateway_method.get_programming_facilitators.id,
+      aws_api_gateway_integration.get_programming_facilitators.id,
+      aws_api_gateway_method.options_programming_facilitators.id,
+      aws_api_gateway_integration.options_programming_facilitators.id,
       aws_lambda_function.programmingHistoryAPI.invoke_arn,
       aws_lambda_function.circulation_lambda.invoke_arn,
       aws_lambda_function.upload_handler.invoke_arn,
@@ -274,6 +284,10 @@ resource "aws_api_gateway_deployment" "circulation" {
     aws_api_gateway_integration.options_programming_history,
     aws_api_gateway_integration.get_programming_compare,
     aws_api_gateway_integration.options_programming_compare,
+    aws_api_gateway_integration.get_programming_sessions,
+    aws_api_gateway_integration.options_programming_sessions,
+    aws_api_gateway_integration.get_programming_facilitators,
+    aws_api_gateway_integration.options_programming_facilitators,
     aws_api_gateway_integration.post_questions_ask,
     aws_api_gateway_integration.options_questions_ask,
   ]
@@ -631,6 +645,170 @@ resource "aws_api_gateway_integration_response" "options_programming_compare_200
   }
 
   depends_on = [aws_api_gateway_integration.options_programming_compare]
+}
+
+# ── /programming/sessions resource ───────────────────────────────────────────
+
+resource "aws_api_gateway_resource" "programming_sessions" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  parent_id   = aws_api_gateway_resource.programming.id
+  path_part   = "sessions"
+}
+
+resource "aws_api_gateway_method" "get_programming_sessions" {
+  rest_api_id   = aws_api_gateway_rest_api.circulation.id
+  resource_id   = aws_api_gateway_resource.programming_sessions.id
+  http_method   = "GET"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.jwt.id
+
+  request_parameters = {
+    "method.request.querystring.branch"       = false
+    "method.request.querystring.facilitator"  = false
+    "method.request.querystring.program_name" = false
+    "method.request.querystring.date_from"    = false
+    "method.request.querystring.date_to"      = false
+    "method.request.querystring.report_type"  = false
+    "method.request.querystring.limit"        = false
+  }
+}
+
+resource "aws_api_gateway_integration" "get_programming_sessions" {
+  rest_api_id             = aws_api_gateway_rest_api.circulation.id
+  resource_id             = aws_api_gateway_resource.programming_sessions.id
+  http_method             = aws_api_gateway_method.get_programming_sessions.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.programmingHistoryAPI.invoke_arn
+}
+
+resource "aws_api_gateway_method" "options_programming_sessions" {
+  rest_api_id   = aws_api_gateway_rest_api.circulation.id
+  resource_id   = aws_api_gateway_resource.programming_sessions.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_programming_sessions" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.programming_sessions.id
+  http_method = aws_api_gateway_method.options_programming_sessions.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+resource "aws_api_gateway_method_response" "options_programming_sessions_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.programming_sessions.id
+  http_method = aws_api_gateway_method.options_programming_sessions.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_programming_sessions_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.programming_sessions.id
+  http_method = aws_api_gateway_method.options_programming_sessions.http_method
+  status_code = aws_api_gateway_method_response.options_programming_sessions_200.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'${var.cors_origin}'"
+  }
+
+  depends_on = [aws_api_gateway_integration.options_programming_sessions]
+}
+
+# ── /programming/facilitators resource ───────────────────────────────────────
+
+resource "aws_api_gateway_resource" "programming_facilitators" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  parent_id   = aws_api_gateway_resource.programming.id
+  path_part   = "facilitators"
+}
+
+resource "aws_api_gateway_method" "get_programming_facilitators" {
+  rest_api_id   = aws_api_gateway_rest_api.circulation.id
+  resource_id   = aws_api_gateway_resource.programming_facilitators.id
+  http_method   = "GET"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.jwt.id
+
+  request_parameters = {
+    "method.request.querystring.branch" = true
+  }
+}
+
+resource "aws_api_gateway_integration" "get_programming_facilitators" {
+  rest_api_id             = aws_api_gateway_rest_api.circulation.id
+  resource_id             = aws_api_gateway_resource.programming_facilitators.id
+  http_method             = aws_api_gateway_method.get_programming_facilitators.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.programmingHistoryAPI.invoke_arn
+}
+
+resource "aws_api_gateway_method" "options_programming_facilitators" {
+  rest_api_id   = aws_api_gateway_rest_api.circulation.id
+  resource_id   = aws_api_gateway_resource.programming_facilitators.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_programming_facilitators" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.programming_facilitators.id
+  http_method = aws_api_gateway_method.options_programming_facilitators.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+resource "aws_api_gateway_method_response" "options_programming_facilitators_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.programming_facilitators.id
+  http_method = aws_api_gateway_method.options_programming_facilitators.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_programming_facilitators_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.programming_facilitators.id
+  http_method = aws_api_gateway_method.options_programming_facilitators.http_method
+  status_code = aws_api_gateway_method_response.options_programming_facilitators_200.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'${var.cors_origin}'"
+  }
+
+  depends_on = [aws_api_gateway_integration.options_programming_facilitators]
 }
 
 # ── /questions resource ───────────────────────────────────────────────────────

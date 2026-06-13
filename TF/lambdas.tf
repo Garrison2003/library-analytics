@@ -100,7 +100,8 @@ resource "aws_lambda_function" "programmingHistoryAPI" {
 
   environment {
     variables = {
-      DYNAMODB_TABLE = aws_dynamodb_table.programming_data.name
+      DYNAMODB_TABLE         = aws_dynamodb_table.programming_data.name
+      PROGRAM_SESSIONS_TABLE = aws_dynamodb_table.program_sessions.name
     }
   }
 

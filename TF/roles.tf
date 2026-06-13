@@ -201,6 +201,22 @@ resource "aws_iam_role_policy" "programming_history_lambda" {
         Effect   = "Allow"
         Action   = ["dynamodb:Query"]
         Resource = "${aws_dynamodb_table.programming_data.arn}/index/DateIndex"
+      },
+      {
+        Sid    = "DynamoDBSessionsRead"
+        Effect = "Allow"
+        Action = ["dynamodb:Query", "dynamodb:GetItem", "dynamodb:Scan"]
+        Resource = aws_dynamodb_table.program_sessions.arn
+      },
+      {
+        Sid    = "DynamoDBSessionsGSIRead"
+        Effect = "Allow"
+        Action = ["dynamodb:Query"]
+        Resource = [
+          "${aws_dynamodb_table.program_sessions.arn}/index/FacilitatorIndex",
+          "${aws_dynamodb_table.program_sessions.arn}/index/ProgramNameIndex",
+          "${aws_dynamodb_table.program_sessions.arn}/index/ProgramDateIndex",
+        ]
       }
     ]
   })

@@ -3,6 +3,7 @@ import { apiClient } from "../services/api";
 import type { Answer } from "../types/index";
 import BranchSelector from "../components/BranchSelector";
 import ProgrammingCharts from "../components/ProgrammingCharts";
+import ProgrammingQuery from "../components/ProgrammingQuery";
 import QuestionsSection from "../components/QuestionsSection";
 
 const Programming: React.FC = () => {
@@ -85,8 +86,22 @@ const Programming: React.FC = () => {
         </div>
       </section>
 
+      {/* Query Sessions */}
+      <section className="py-16 px-8 bg-white border-t border-gray-200">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Query Sessions
+          </h2>
+          <p className="text-gray-600 mb-6">
+            Search individual program sessions by branch, facilitator, program
+            name, date range, or report type.
+          </p>
+          <ProgrammingQuery branches={branches} selectedBranch={selectedBranch} />
+        </div>
+      </section>
+
       {/* Questions Section */}
-      <section className="py-16 px-8 bg-white">
+      <section className="py-16 px-8 bg-gray-50">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Questions</h2>
           <p className="text-gray-600 mb-6">

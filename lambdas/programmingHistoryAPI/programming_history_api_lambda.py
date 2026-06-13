@@ -202,6 +202,195 @@ def get_branch_history(branch_code: str, months: int = 12) -> Optional[Dict]:
         return None
 
 
+def get_facilitators(branch_codes: list) -> list:
+    """Return sorted unique primary_facilitator values for the given branch codes."""
+    sessions_table_name = _env("PROGRAM_SESSIONS_TABLE", "program-sessions")
+    names: set = set()
+    try:
+        table = dynamodb.Table(sessions_table_name)
+        for code in branch_codes:
+            kw: dict = {
+                "KeyConditionExpression": "branch_code = :bcode",
+                "ExpressionAttributeValues": {":bcode": code},
+                "ProjectionExpression": "primary_facilitator",
+            }
+            while True:
+                resp = table.query(**kw)
+                for item in resp.get("Items", []):
+                    name = (item.get("primary_facilitator") or "").strip()
+                    if name:
+                        names.add(name)
+                lek = resp.get("LastEvaluatedKey")
+                if not lek:
+                    break
+                kw["ExclusiveStartKey"] = lek
+    except Exception as exc:
+        logger.error("get_facilitators error: %s", exc)
+    return sorted(names)
+
+
+def get_sessions(
+    branch: Optional[str] = None,
+    facilitator: Optional[str] = None,
+    program_name: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    report_type: Optional[str] = None,
+    limit: int = 100,
+) -> Optional[Dict]:
+    """
+    Query program_sessions table with flexible filters.
+
+    Index selection priority:
+      1. facilitator  → FacilitatorIndex (PK=primary_facilitator, SK=program_date)
+      2. program_name → ProgramNameIndex (PK=program_name, SK=program_date)
+      3. branch       → main table query (PK=branch_code, SK=session_key prefix)
+      4. none of the above → return empty with a message (avoid unbounded scans)
+
+    Additional conditions (branch, report_type) become FilterExpressions when
+    a GSI is used as the primary access path.
+    """
+    sessions_table_name = _env("PROGRAM_SESSIONS_TABLE", "program-sessions")
+    limit = min(limit, 500)
+
+    try:
+        table = dynamodb.Table(sessions_table_name)
+
+        def _date_range_cond(range_key: str, vals: dict) -> str:
+            """Return KeyConditionExpression fragment for an optional date range."""
+            if date_from and date_to:
+                vals[":dfrom"] = date_from
+                vals[":dto"] = date_to
+                return f" AND {range_key} BETWEEN :dfrom AND :dto"
+            if date_from:
+                vals[":dfrom"] = date_from
+                return f" AND {range_key} >= :dfrom"
+            if date_to:
+                vals[":dto"] = date_to
+                return f" AND {range_key} <= :dto"
+            return ""
+
+        def _extra_filter(vals: dict, include_branch: bool = True) -> str:
+            """Build FilterExpression for branch + report_type side conditions."""
+            parts = []
+            if include_branch and branch:
+                vals[":flt_branch"] = branch
+                parts.append("branch_code = :flt_branch")
+            if report_type:
+                vals[":rtype"] = report_type
+                parts.append("report_type = :rtype")
+            return " AND ".join(parts)
+
+        if facilitator:
+            vals: dict = {":fac": facilitator}
+            key_cond = "primary_facilitator = :fac" + _date_range_cond("program_date", vals)
+            flt = _extra_filter(vals, include_branch=True)
+            kwargs: dict = dict(
+                IndexName="FacilitatorIndex",
+                KeyConditionExpression=key_cond,
+                ExpressionAttributeValues=vals,
+                ScanIndexForward=False,
+                Limit=limit,
+            )
+            if flt:
+                kwargs["FilterExpression"] = flt
+            items = table.query(**kwargs).get("Items", [])
+
+        elif program_name:
+            vals = {":pname": program_name}
+            key_cond = "program_name = :pname" + _date_range_cond("program_date", vals)
+            flt = _extra_filter(vals, include_branch=True)
+            kwargs = dict(
+                IndexName="ProgramNameIndex",
+                KeyConditionExpression=key_cond,
+                ExpressionAttributeValues=vals,
+                ScanIndexForward=False,
+                Limit=limit,
+            )
+            if flt:
+                kwargs["FilterExpression"] = flt
+            items = table.query(**kwargs).get("Items", [])
+
+        elif branch:
+            # Main table: PK=branch_code, SK=session_key (YYYY-MM-DD#name#facilitator…)
+            # Expand departments so e.g. IMG also pulls SPA + TEL session rows.
+            branch_codes = [branch] + BRANCH_DEPARTMENTS.get(branch, [])
+            items = []
+            for code in branch_codes:
+                vals = {":bcode": code}
+                key_cond = "branch_code = :bcode"
+                if date_from and date_to:
+                    vals[":dfrom"] = date_from
+                    vals[":dto"] = date_to + "~"  # "~" sorts after all printable ASCII
+                    key_cond += " AND session_key BETWEEN :dfrom AND :dto"
+                elif date_from:
+                    vals[":dfrom"] = date_from
+                    key_cond += " AND session_key >= :dfrom"
+                elif date_to:
+                    vals[":dto"] = date_to + "~"
+                    key_cond += " AND session_key <= :dto"
+                flt_parts = []
+                if report_type:
+                    vals[":rtype"] = report_type
+                    flt_parts.append("report_type = :rtype")
+                branch_kwargs: dict = dict(
+                    KeyConditionExpression=key_cond,
+                    ExpressionAttributeValues=vals,
+                    ScanIndexForward=False,
+                    Limit=limit,
+                )
+                if flt_parts:
+                    branch_kwargs["FilterExpression"] = " AND ".join(flt_parts)
+                items.extend(table.query(**branch_kwargs).get("Items", []))
+
+        else:
+            # No primary filter — refuse unbounded scan
+            return {
+                "sessions": [],
+                "count": 0,
+                "filters": {},
+                "message": "At least one of branch, facilitator, or program_name is required",
+            }
+
+        sessions = [
+            {
+                "program_date": item.get("program_date", ""),
+                "program_name": item.get("program_name", ""),
+                "primary_facilitator": item.get("primary_facilitator", ""),
+                "branch_code": item.get("branch_code", ""),
+                "branch_name": item.get("branch_name") or _get_branch_name(item.get("branch_code", "")),
+                "total_attendance": int(item.get("total_attendance", 0)),
+                "num_programs": int(item.get("num_programs", 0)),
+                "report_type": item.get("report_type", ""),
+                "outreach_site": item.get("outreach_site", ""),
+            }
+            for item in items
+        ]
+
+        sessions.sort(key=lambda s: s["program_date"], reverse=True)
+        sessions = sessions[:limit]
+
+        logger.info("Sessions query returned %d results (branch=%s, facilitator=%s, program=%s)",
+                    len(sessions), branch, facilitator, program_name)
+
+        return {
+            "sessions": sessions,
+            "count": len(sessions),
+            "filters": {
+                "branch": branch,
+                "facilitator": facilitator,
+                "program_name": program_name,
+                "date_from": date_from,
+                "date_to": date_to,
+                "report_type": report_type,
+            },
+        }
+
+    except Exception as exc:
+        logger.exception("Error querying sessions: %s", str(exc))
+        return None
+
+
 def compare_branches(branch_codes: List[str], year_month: Optional[str] = None) -> Optional[Dict]:
     """
     Compare metrics across multiple branches.
@@ -354,8 +543,40 @@ def lambda_handler(event, context):
         
         logger.info("Path: %s, Params: %s", path, query_params)
         
+        # Route: /programming/facilitators  (distinct facilitators for a branch)
+        if "/programming/facilitators" in path:
+            branch_raw = (query_params.get("branch", "") or "").upper()
+            if not branch_raw:
+                return _api_err(400, "MISSING_PARAMETER", "branch parameter is required")
+            branch_codes = BRANCH_DEPARTMENTS.get(branch_raw, [branch_raw])
+            facilitators = get_facilitators(branch_codes)
+            return _api_ok({"facilitators": facilitators, "branch": branch_raw, "count": len(facilitators)})
+
+        # Route: /programming/sessions  (per-session query)
+        elif "/programming/sessions" in path:
+            branch_raw = (query_params.get("branch", "") or "").upper() or None
+            facilitator = query_params.get("facilitator") or None
+            prog_name = query_params.get("program_name") or None
+            date_from = query_params.get("date_from") or None
+            date_to = query_params.get("date_to") or None
+            report_type = query_params.get("report_type") or None
+            limit = int(query_params.get("limit", 100))
+
+            data = get_sessions(
+                branch=branch_raw,
+                facilitator=facilitator,
+                program_name=prog_name,
+                date_from=date_from,
+                date_to=date_to,
+                report_type=report_type,
+                limit=limit,
+            )
+            if data is not None:
+                return _api_ok(data)
+            return _api_err(500, "INTERNAL_ERROR", "Failed to query sessions")
+
         # Route: /programming/history?branch=IMG&months=12
-        if "/programming/history" in path:
+        elif "/programming/history" in path:  # noqa: RET505
             branch_code = query_params.get("branch", "").upper()
             months = int(query_params.get("months", 12))
             
@@ -369,7 +590,7 @@ def lambda_handler(event, context):
                 return _api_err(500, "INTERNAL_ERROR", "Failed to query historical data")
         
         # Route: /programming/compare?branches=IMG,MAI,PLZ&month=2026-05
-        elif "/programming/compare" in path:
+        elif "/programming/compare" in path:  # noqa: RET505
             branches_param = query_params.get("branches", "")
             month_param = query_params.get("month")
             
