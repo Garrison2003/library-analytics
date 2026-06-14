@@ -202,6 +202,33 @@ def get_branch_history(branch_code: str, months: int = 12) -> Optional[Dict]:
         return None
 
 
+def get_program_names(branch_codes: list) -> list:
+    """Return sorted unique program_name values for the given branch codes."""
+    sessions_table_name = _env("PROGRAM_SESSIONS_TABLE", "program-sessions")
+    names: set = set()
+    try:
+        table = dynamodb.Table(sessions_table_name)
+        for code in branch_codes:
+            kw: dict = {
+                "KeyConditionExpression": "branch_code = :bcode",
+                "ExpressionAttributeValues": {":bcode": code},
+                "ProjectionExpression": "program_name",
+            }
+            while True:
+                resp = table.query(**kw)
+                for item in resp.get("Items", []):
+                    name = (item.get("program_name") or "").strip()
+                    if name:
+                        names.add(name)
+                lek = resp.get("LastEvaluatedKey")
+                if not lek:
+                    break
+                kw["ExclusiveStartKey"] = lek
+    except Exception as exc:
+        logger.error("get_program_names error: %s", exc)
+    return sorted(names)
+
+
 def get_facilitators(branch_codes: list) -> list:
     """Return sorted unique primary_facilitator values for the given branch codes."""
     sessions_table_name = _env("PROGRAM_SESSIONS_TABLE", "program-sessions")
@@ -270,12 +297,30 @@ def get_sessions(
                 return f" AND {range_key} <= :dto"
             return ""
 
-        def _extra_filter(vals: dict, include_branch: bool = True) -> str:
-            """Build FilterExpression for branch + report_type side conditions."""
+        def _extra_filter(
+            vals: dict,
+            include_branch: bool = True,
+            include_program_name: bool = True,
+        ) -> str:
+            """Build FilterExpression for branch, program_name, and report_type."""
             parts = []
             if include_branch and branch:
-                vals[":flt_branch"] = branch
-                parts.append("branch_code = :flt_branch")
+                dept_codes = BRANCH_DEPARTMENTS.get(branch, [])
+                if dept_codes:
+                    # Branch aggregates departments (e.g. IMG → SPA + TEL)
+                    all_codes = [branch] + dept_codes
+                    placeholders = []
+                    for i, code in enumerate(all_codes):
+                        key = f":flt_branch_{i}"
+                        vals[key] = code
+                        placeholders.append(key)
+                    parts.append(f"branch_code IN ({', '.join(placeholders)})")
+                else:
+                    vals[":flt_branch"] = branch
+                    parts.append("branch_code = :flt_branch")
+            if include_program_name and program_name:
+                vals[":pname_flt"] = program_name
+                parts.append("program_name = :pname_flt")
             if report_type:
                 vals[":rtype"] = report_type
                 parts.append("report_type = :rtype")
@@ -299,7 +344,7 @@ def get_sessions(
         elif program_name:
             vals = {":pname": program_name}
             key_cond = "program_name = :pname" + _date_range_cond("program_date", vals)
-            flt = _extra_filter(vals, include_branch=True)
+            flt = _extra_filter(vals, include_branch=True, include_program_name=False)
             kwargs = dict(
                 IndexName="ProgramNameIndex",
                 KeyConditionExpression=key_cond,
@@ -543,8 +588,17 @@ def lambda_handler(event, context):
         
         logger.info("Path: %s, Params: %s", path, query_params)
         
+        # Route: /programming/program-names  (distinct program names for a branch)
+        if "/programming/program-names" in path:
+            branch_raw = (query_params.get("branch", "") or "").upper()
+            if not branch_raw:
+                return _api_err(400, "MISSING_PARAMETER", "branch parameter is required")
+            branch_codes = BRANCH_DEPARTMENTS.get(branch_raw, [branch_raw])
+            prog_names = get_program_names(branch_codes)
+            return _api_ok({"program_names": prog_names, "branch": branch_raw, "count": len(prog_names)})
+
         # Route: /programming/facilitators  (distinct facilitators for a branch)
-        if "/programming/facilitators" in path:
+        elif "/programming/facilitators" in path:
             branch_raw = (query_params.get("branch", "") or "").upper()
             if not branch_raw:
                 return _api_err(400, "MISSING_PARAMETER", "branch parameter is required")
@@ -553,7 +607,7 @@ def lambda_handler(event, context):
             return _api_ok({"facilitators": facilitators, "branch": branch_raw, "count": len(facilitators)})
 
         # Route: /programming/sessions  (per-session query)
-        elif "/programming/sessions" in path:
+        elif "/programming/sessions" in path:  # noqa: RET505
             branch_raw = (query_params.get("branch", "") or "").upper() or None
             facilitator = query_params.get("facilitator") or None
             prog_name = query_params.get("program_name") or None

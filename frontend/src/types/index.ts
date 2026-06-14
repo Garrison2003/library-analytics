@@ -180,6 +180,12 @@ export interface FacilitatorsResponse {
   count: number;
 }
 
+export interface ProgramNamesResponse {
+  program_names: string[];
+  branch: string;
+  count: number;
+}
+
 // ============================================================================
 // MCP SERVER & AI TYPES
 // ============================================================================

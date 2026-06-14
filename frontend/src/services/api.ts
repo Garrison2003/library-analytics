@@ -10,6 +10,7 @@ import type {
   ProgramSessionFilters,
   ProgramSessionsResponse,
   FacilitatorsResponse,
+  ProgramNamesResponse,
 } from "../types/index";
 
 class APIService {
@@ -105,6 +106,14 @@ class APIService {
   ): Promise<APIResponse<FacilitatorsResponse>> {
     return this.request<FacilitatorsResponse>(
       `/programming/facilitators?branch=${encodeURIComponent(branchCode)}`,
+    );
+  }
+
+  async getProgrammingProgramNames(
+    branchCode: string,
+  ): Promise<APIResponse<ProgramNamesResponse>> {
+    return this.request<ProgramNamesResponse>(
+      `/programming/program-names?branch=${encodeURIComponent(branchCode)}`,
     );
   }
 

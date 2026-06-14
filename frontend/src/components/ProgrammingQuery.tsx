@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { apiClient } from "../services/api";
 import type { ProgramSession, ProgramSessionFilters } from "../types/index";
 
@@ -45,39 +45,164 @@ interface ProgrammingQueryProps {
   selectedBranch: string;
 }
 
+// ── Collapsible multi-select dropdown ────────────────────────────────────────
+
+interface MultiSelectDropdownProps {
+  label: string;
+  items: string[];
+  selected: string[];
+  loading: boolean;
+  open: boolean;
+  onToggleOpen: () => void;
+  onToggleItem: (item: string) => void;
+  onSelectAll: () => void;
+  onClearAll: () => void;
+  placeholder: string;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+}
+
+const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
+  label,
+  items,
+  selected,
+  loading,
+  open,
+  onToggleOpen,
+  onToggleItem,
+  onSelectAll,
+  onClearAll,
+  placeholder,
+  containerRef,
+}) => {
+  const triggerLabel =
+    selected.length === 0
+      ? placeholder
+      : selected.length === 1
+        ? selected[0]
+        : `${selected.length} selected`;
+
+  const triggerClass =
+    "w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-left flex justify-between items-center bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed";
+
+  return (
+    <div ref={containerRef} className="relative">
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label}
+        {selected.length > 0 && (
+          <span className="ml-2 text-xs font-normal text-blue-600">
+            {selected.length} selected
+          </span>
+        )}
+      </label>
+
+      <button
+        type="button"
+        className={triggerClass}
+        onClick={onToggleOpen}
+        disabled={loading || (!open && items.length === 0)}
+      >
+        <span className={selected.length === 0 ? "text-gray-400" : "text-gray-900"}>
+          {loading ? "Loading…" : items.length === 0 ? "No options available" : triggerLabel}
+        </span>
+        <svg
+          className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && items.length > 0 && (
+        <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+            <span className="text-xs text-gray-500">{items.length} options</span>
+            <div className="flex gap-2 text-xs text-blue-600">
+              <button type="button" className="hover:underline" onClick={onSelectAll}>
+                All
+              </button>
+              <span className="text-gray-300">|</span>
+              <button type="button" className="hover:underline" onClick={onClearAll}>
+                None
+              </button>
+            </div>
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {items.map((item) => (
+              <label
+                key={item}
+                className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-gray-50 select-none"
+              >
+                <input
+                  type="checkbox"
+                  className="accent-blue-600"
+                  checked={selected.includes(item)}
+                  onChange={() => onToggleItem(item)}
+                />
+                <span className="text-sm text-gray-700">{item}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Main component ────────────────────────────────────────────────────────────
+
 const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({
   branches,
   selectedBranch,
 }) => {
   const [internalBranch, setInternalBranch] = useState<string>(selectedBranch);
+
   const [facilitatorList, setFacilitatorList] = useState<string[]>([]);
-  const [loadingFacilitators, setLoadingFacilitators] =
-    useState<boolean>(false);
-  const [selectedFacilitators, setSelectedFacilitators] = useState<string[]>(
-    [],
-  );
-  const [programName, setProgramName] = useState<string>("");
-  const [dateFrom, setDateFrom] = useState<string>("");
-  const [dateTo, setDateTo] = useState<string>("");
-  const [reportType, setReportType] = useState<string>("");
+  const [loadingFacilitators, setLoadingFacilitators] = useState(false);
+  const [selectedFacilitators, setSelectedFacilitators] = useState<string[]>([]);
+  const [facilitatorOpen, setFacilitatorOpen] = useState(false);
+
+  const [programNameList, setProgramNameList] = useState<string[]>([]);
+  const [loadingProgramNames, setLoadingProgramNames] = useState(false);
+  const [selectedProgramNames, setSelectedProgramNames] = useState<string[]>([]);
+  const [programNameOpen, setProgramNameOpen] = useState(false);
+
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [reportType, setReportType] = useState("");
 
   const [sessions, setSessions] = useState<ProgramSession[] | null>(null);
-  const [total, setTotal] = useState<number>(0);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasQueried, setHasQueried] = useState<boolean>(false);
+  const [hasQueried, setHasQueried] = useState(false);
 
-  const canSubmit = !!(internalBranch || programName.trim());
+  const facilitatorRef = useRef<HTMLDivElement>(null);
+  const programNameRef = useRef<HTMLDivElement>(null);
+
+  const canSubmit = !!(internalBranch || selectedProgramNames.length > 0 || selectedFacilitators.length > 0);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (facilitatorRef.current && !facilitatorRef.current.contains(e.target as Node)) {
+        setFacilitatorOpen(false);
+      }
+      if (programNameRef.current && !programNameRef.current.contains(e.target as Node)) {
+        setProgramNameOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const fetchFacilitators = useCallback(async (branchCode: string) => {
     setLoadingFacilitators(true);
     try {
       const result = await apiClient.getProgrammingFacilitators(branchCode);
-      if (result.success && result.data) {
-        setFacilitatorList(result.data.facilitators);
-      } else {
-        setFacilitatorList([]);
-      }
+      setFacilitatorList(result.success && result.data ? result.data.facilitators : []);
     } catch {
       setFacilitatorList([]);
     } finally {
@@ -85,37 +210,101 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({
     }
   }, []);
 
-  // Sync branch from page-level selector
+  const fetchProgramNames = useCallback(async (branchCode: string) => {
+    setLoadingProgramNames(true);
+    try {
+      const result = await apiClient.getProgrammingProgramNames(branchCode);
+      setProgramNameList(result.success && result.data ? result.data.program_names : []);
+    } catch {
+      setProgramNameList([]);
+    } finally {
+      setLoadingProgramNames(false);
+    }
+  }, []);
+
+  const autoLoadBranch = useCallback(async (branchCode: string) => {
+    setLoading(true);
+    setError(null);
+    setHasQueried(true);
+    try {
+      const result = await apiClient.getProgrammingSessions({ branch: branchCode });
+      if (result.success && result.data) {
+        setSessions(result.data.sessions);
+        setTotal(result.data.count);
+      } else {
+        setSessions([]);
+        setTotal(0);
+      }
+    } catch {
+      setError("Failed to load sessions.");
+      setSessions([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Sync from page-level branch selector
   useEffect(() => {
     setInternalBranch(selectedBranch);
     setSelectedFacilitators([]);
-    setSessions(null);
-    setHasQueried(false);
+    setSelectedProgramNames([]);
+    setDateFrom("");
+    setDateTo("");
+    setReportType("");
+    setFacilitatorOpen(false);
+    setProgramNameOpen(false);
     const code = BRANCH_NAME_TO_CODE[selectedBranch];
     if (code) {
       fetchFacilitators(code);
+      fetchProgramNames(code);
+      autoLoadBranch(code);
     } else {
       setFacilitatorList([]);
+      setProgramNameList([]);
+      setSessions(null);
+      setHasQueried(false);
     }
-  }, [selectedBranch, fetchFacilitators]);
+  }, [selectedBranch, fetchFacilitators, fetchProgramNames, autoLoadBranch]);
 
   const handleBranchChange = (branch: string) => {
     setInternalBranch(branch);
     setSelectedFacilitators([]);
-    setSessions(null);
-    setHasQueried(false);
+    setSelectedProgramNames([]);
+    setDateFrom("");
+    setDateTo("");
+    setReportType("");
+    setFacilitatorOpen(false);
+    setProgramNameOpen(false);
     const code = BRANCH_NAME_TO_CODE[branch];
     if (code) {
       fetchFacilitators(code);
+      fetchProgramNames(code);
+      autoLoadBranch(code);
     } else {
       setFacilitatorList([]);
+      setProgramNameList([]);
+      setSessions(null);
+      setHasQueried(false);
     }
   };
 
-  const toggleFacilitator = (name: string) => {
-    setSelectedFacilitators((prev) =>
-      prev.includes(name) ? prev.filter((f) => f !== name) : [...prev, name],
-    );
+  // Merge + deduplicate results from parallel queries
+  const mergeResults = (results: Awaited<ReturnType<typeof apiClient.getProgrammingSessions>>[]) => {
+    const seen = new Set<string>();
+    const merged: ProgramSession[] = [];
+    for (const r of results) {
+      if (r.success && r.data) {
+        for (const s of r.data.sessions) {
+          const key = `${s.program_date}|${s.program_name}|${s.primary_facilitator}|${s.branch_code}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            merged.push(s);
+          }
+        }
+      }
+    }
+    merged.sort((a, b) => b.program_date.localeCompare(a.program_date));
+    return merged;
   };
 
   const handleSearch = async () => {
@@ -123,49 +312,34 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({
     setLoading(true);
     setError(null);
     setHasQueried(true);
+    setFacilitatorOpen(false);
+    setProgramNameOpen(false);
 
-    const branchCode = internalBranch
-      ? BRANCH_NAME_TO_CODE[internalBranch]
-      : undefined;
-
-    const baseFilters: ProgramSessionFilters = {
+    const branchCode = BRANCH_NAME_TO_CODE[internalBranch];
+    const base: ProgramSessionFilters = {
       branch: branchCode,
-      programName: programName.trim() || undefined,
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
       reportType: reportType || undefined,
     };
 
     try {
-      if (selectedFacilitators.length > 1) {
-        // Parallel query per facilitator, merge + deduplicate results
-        const results = await Promise.all(
-          selectedFacilitators.map((f) =>
-            apiClient.getProgrammingSessions({ ...baseFilters, facilitator: f }),
-          ),
+      // Build query list: N facilitators × M programs (or branch-only)
+      let queryList: ProgramSessionFilters[];
+      if (selectedFacilitators.length > 0 && selectedProgramNames.length > 0) {
+        queryList = selectedFacilitators.flatMap((f) =>
+          selectedProgramNames.map((p) => ({ ...base, facilitator: f, programName: p })),
         );
-        const seen = new Set<string>();
-        const merged: ProgramSession[] = [];
-        for (const result of results) {
-          if (result.success && result.data) {
-            for (const s of result.data.sessions) {
-              const key = `${s.program_date}|${s.program_name}|${s.primary_facilitator}|${s.branch_code}`;
-              if (!seen.has(key)) {
-                seen.add(key);
-                merged.push(s);
-              }
-            }
-          }
-        }
-        merged.sort((a, b) => b.program_date.localeCompare(a.program_date));
-        setSessions(merged);
-        setTotal(merged.length);
+      } else if (selectedFacilitators.length > 0) {
+        queryList = selectedFacilitators.map((f) => ({ ...base, facilitator: f }));
+      } else if (selectedProgramNames.length > 0) {
+        queryList = selectedProgramNames.map((p) => ({ ...base, programName: p }));
       } else {
-        const filters: ProgramSessionFilters = {
-          ...baseFilters,
-          facilitator: selectedFacilitators[0] || undefined,
-        };
-        const result = await apiClient.getProgrammingSessions(filters);
+        queryList = [base];
+      }
+
+      if (queryList.length === 1) {
+        const result = await apiClient.getProgrammingSessions(queryList[0]);
         if (result.success && result.data) {
           setSessions(result.data.sessions);
           setTotal(result.data.count);
@@ -173,6 +347,13 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({
           setError(result.error?.message ?? "Query failed");
           setSessions([]);
         }
+      } else {
+        const results = await Promise.all(
+          queryList.map((f) => apiClient.getProgrammingSessions(f)),
+        );
+        const merged = mergeResults(results);
+        setSessions(merged);
+        setTotal(merged.length);
       }
     } catch {
       setError("Failed to load session data. Please try again.");
@@ -184,23 +365,26 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({
 
   const handleClear = () => {
     setSelectedFacilitators([]);
-    setProgramName("");
+    setSelectedProgramNames([]);
     setDateFrom("");
     setDateTo("");
     setReportType("");
-    setSessions(null);
-    setTotal(0);
     setError(null);
-    setHasQueried(false);
+    setFacilitatorOpen(false);
+    setProgramNameOpen(false);
+    const code = BRANCH_NAME_TO_CODE[internalBranch];
+    if (code) {
+      autoLoadBranch(code);
+    } else {
+      setSessions(null);
+      setTotal(0);
+      setHasQueried(false);
+    }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && canSubmit) handleSearch();
-  };
-
-  const labelClass = "block text-sm font-medium text-gray-700 mb-1";
   const inputClass =
     "w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500";
+  const labelClass = "block text-sm font-medium text-gray-700 mb-1";
 
   return (
     <div>
@@ -224,77 +408,43 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({
             </select>
           </div>
 
-          {/* Facilitator multi-select */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className={labelClass.replace(" mb-1", "")}>
-                Facilitator
-                {selectedFacilitators.length > 0 && (
-                  <span className="ml-2 text-xs font-normal text-blue-600">
-                    {selectedFacilitators.length} selected
-                  </span>
-                )}
-              </label>
-              {facilitatorList.length > 0 && (
-                <div className="flex gap-2 text-xs text-blue-600">
-                  <button
-                    type="button"
-                    className="hover:underline"
-                    onClick={() => setSelectedFacilitators([...facilitatorList])}
-                  >
-                    All
-                  </button>
-                  <span className="text-gray-300">|</span>
-                  <button
-                    type="button"
-                    className="hover:underline"
-                    onClick={() => setSelectedFacilitators([])}
-                  >
-                    None
-                  </button>
-                </div>
-              )}
-            </div>
-            {loadingFacilitators ? (
-              <div className="border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-400 h-10 flex items-center">
-                Loading…
-              </div>
-            ) : facilitatorList.length === 0 ? (
-              <div className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-400 h-10 flex items-center">
-                {internalBranch ? "No facilitators found" : "Select a branch"}
-              </div>
-            ) : (
-              <div className="border border-gray-300 rounded-md overflow-y-auto max-h-40">
-                {facilitatorList.map((f) => (
-                  <label
-                    key={f}
-                    className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-gray-50 select-none"
-                  >
-                    <input
-                      type="checkbox"
-                      className="accent-blue-600"
-                      checked={selectedFacilitators.includes(f)}
-                      onChange={() => toggleFacilitator(f)}
-                    />
-                    <span className="text-sm text-gray-700">{f}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Facilitator collapsible multi-select */}
+          <MultiSelectDropdown
+            label="Facilitator"
+            items={facilitatorList}
+            selected={selectedFacilitators}
+            loading={loadingFacilitators}
+            open={facilitatorOpen}
+            onToggleOpen={() => setFacilitatorOpen((o) => !o)}
+            onToggleItem={(f) =>
+              setSelectedFacilitators((prev) =>
+                prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f],
+              )
+            }
+            onSelectAll={() => setSelectedFacilitators([...facilitatorList])}
+            onClearAll={() => setSelectedFacilitators([])}
+            placeholder="Select facilitators…"
+            containerRef={facilitatorRef}
+          />
 
-          {/* Program Name */}
-          <div>
-            <label className={labelClass}>Program Name</label>
-            <input
-              type="text"
-              className={inputClass}
-              value={programName}
-              onChange={(e) => setProgramName(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Exact program name"
-            />
-          </div>
+          {/* Program Name collapsible multi-select */}
+          <MultiSelectDropdown
+            label="Program Name"
+            items={programNameList}
+            selected={selectedProgramNames}
+            loading={loadingProgramNames}
+            open={programNameOpen}
+            onToggleOpen={() => setProgramNameOpen((o) => !o)}
+            onToggleItem={(p) =>
+              setSelectedProgramNames((prev) =>
+                prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p],
+              )
+            }
+            onSelectAll={() => setSelectedProgramNames([...programNameList])}
+            onClearAll={() => setSelectedProgramNames([])}
+            placeholder="Select programs…"
+            containerRef={programNameRef}
+          />
 
           {/* Date From */}
           <div>
@@ -349,7 +499,7 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({
           </button>
           {!canSubmit && (
             <p className="text-sm text-amber-600">
-              Select a branch or enter a program name to search.
+              Select a branch to filter sessions.
             </p>
           )}
         </div>
@@ -359,6 +509,15 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
           {error}
+        </div>
+      )}
+
+      {/* Loading skeleton */}
+      {loading && (
+        <div className="animate-pulse space-y-2">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-10 bg-gray-100 rounded" />
+          ))}
         </div>
       )}
 
@@ -403,9 +562,7 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({
                       <td className="px-4 py-3 whitespace-nowrap text-gray-900">
                         {s.program_date}
                       </td>
-                      <td className="px-4 py-3 text-gray-900">
-                        {s.program_name}
-                      </td>
+                      <td className="px-4 py-3 text-gray-900">{s.program_name}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-gray-700">
                         {s.primary_facilitator}
                       </td>
