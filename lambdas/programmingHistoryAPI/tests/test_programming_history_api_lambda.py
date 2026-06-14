@@ -406,6 +406,19 @@ class TestGetSessions:
         assert "FilterExpression" in kwargs
         assert ":flt_branch" in kwargs["ExpressionAttributeValues"]
 
+    def test_img_branch_expands_to_spa_tel_in_facilitator_filter(self):
+        """IMG→SPA+TEL expansion must use IN (...) not = 'IMG' so sessions stored
+        under SPA/TEL branch codes are included in facilitator queries."""
+        self.table.query.return_value = {"Items": []}
+        get_sessions(facilitator="CMontague", branch="IMG")
+        kwargs = self.table.query.call_args.kwargs
+        flt = kwargs.get("FilterExpression", "")
+        vals = kwargs["ExpressionAttributeValues"]
+        assert "IN" in flt
+        branch_vals = {v for k, v in vals.items() if k.startswith(":flt_branch")}
+        assert "SPA" in branch_vals
+        assert "TEL" in branch_vals
+
     def test_report_type_added_as_filter_expression(self):
         self.table.query.return_value = {"Items": []}
         get_sessions(facilitator="Jane Smith", report_type="outreach")

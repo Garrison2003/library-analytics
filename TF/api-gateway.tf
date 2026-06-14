@@ -245,6 +245,11 @@ resource "aws_api_gateway_deployment" "circulation" {
       aws_api_gateway_integration.get_programming_sessions.id,
       aws_api_gateway_method.options_programming_sessions.id,
       aws_api_gateway_integration.options_programming_sessions.id,
+      aws_api_gateway_resource.programming_program_names.id,
+      aws_api_gateway_method.get_programming_program_names.id,
+      aws_api_gateway_integration.get_programming_program_names.id,
+      aws_api_gateway_method.options_programming_program_names.id,
+      aws_api_gateway_integration.options_programming_program_names.id,
       aws_api_gateway_resource.programming_facilitators.id,
       aws_api_gateway_method.get_programming_facilitators.id,
       aws_api_gateway_integration.get_programming_facilitators.id,
@@ -286,6 +291,8 @@ resource "aws_api_gateway_deployment" "circulation" {
     aws_api_gateway_integration.options_programming_compare,
     aws_api_gateway_integration.get_programming_sessions,
     aws_api_gateway_integration.options_programming_sessions,
+    aws_api_gateway_integration.get_programming_program_names,
+    aws_api_gateway_integration.options_programming_program_names,
     aws_api_gateway_integration.get_programming_facilitators,
     aws_api_gateway_integration.options_programming_facilitators,
     aws_api_gateway_integration.post_questions_ask,
@@ -730,6 +737,85 @@ resource "aws_api_gateway_integration_response" "options_programming_sessions_20
   }
 
   depends_on = [aws_api_gateway_integration.options_programming_sessions]
+}
+
+# ── /programming/program-names resource ──────────────────────────────────────
+
+resource "aws_api_gateway_resource" "programming_program_names" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  parent_id   = aws_api_gateway_resource.programming.id
+  path_part   = "program-names"
+}
+
+resource "aws_api_gateway_method" "get_programming_program_names" {
+  rest_api_id   = aws_api_gateway_rest_api.circulation.id
+  resource_id   = aws_api_gateway_resource.programming_program_names.id
+  http_method   = "GET"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.jwt.id
+
+  request_parameters = {
+    "method.request.querystring.branch" = true
+  }
+}
+
+resource "aws_api_gateway_integration" "get_programming_program_names" {
+  rest_api_id             = aws_api_gateway_rest_api.circulation.id
+  resource_id             = aws_api_gateway_resource.programming_program_names.id
+  http_method             = aws_api_gateway_method.get_programming_program_names.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.programmingHistoryAPI.invoke_arn
+}
+
+resource "aws_api_gateway_method" "options_programming_program_names" {
+  rest_api_id   = aws_api_gateway_rest_api.circulation.id
+  resource_id   = aws_api_gateway_resource.programming_program_names.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_programming_program_names" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.programming_program_names.id
+  http_method = aws_api_gateway_method.options_programming_program_names.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+resource "aws_api_gateway_method_response" "options_programming_program_names_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.programming_program_names.id
+  http_method = aws_api_gateway_method.options_programming_program_names.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_programming_program_names_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.programming_program_names.id
+  http_method = aws_api_gateway_method.options_programming_program_names.http_method
+  status_code = aws_api_gateway_method_response.options_programming_program_names_200.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'${var.cors_origin}'"
+  }
+
+  depends_on = [aws_api_gateway_integration.options_programming_program_names]
 }
 
 # ── /programming/facilitators resource ───────────────────────────────────────
