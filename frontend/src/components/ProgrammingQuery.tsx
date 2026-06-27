@@ -222,27 +222,6 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({
     }
   }, []);
 
-  const autoLoadBranch = useCallback(async (branchCode: string) => {
-    setLoading(true);
-    setError(null);
-    setHasQueried(true);
-    try {
-      const result = await apiClient.getProgrammingSessions({ branch: branchCode });
-      if (result.success && result.data) {
-        setSessions(result.data.sessions);
-        setTotal(result.data.count);
-      } else {
-        setSessions([]);
-        setTotal(0);
-      }
-    } catch {
-      setError("Failed to load sessions.");
-      setSessions([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   // Sync from page-level branch selector
   useEffect(() => {
     setInternalBranch(selectedBranch);
@@ -253,18 +232,18 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({
     setReportType("");
     setFacilitatorOpen(false);
     setProgramNameOpen(false);
+    setSessions(null);
+    setHasQueried(false);
+    setError(null);
     const code = BRANCH_NAME_TO_CODE[selectedBranch];
     if (code) {
       fetchFacilitators(code);
       fetchProgramNames(code);
-      autoLoadBranch(code);
     } else {
       setFacilitatorList([]);
       setProgramNameList([]);
-      setSessions(null);
-      setHasQueried(false);
     }
-  }, [selectedBranch, fetchFacilitators, fetchProgramNames, autoLoadBranch]);
+  }, [selectedBranch, fetchFacilitators, fetchProgramNames]);
 
   const handleBranchChange = (branch: string) => {
     setInternalBranch(branch);
@@ -275,16 +254,16 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({
     setReportType("");
     setFacilitatorOpen(false);
     setProgramNameOpen(false);
+    setSessions(null);
+    setHasQueried(false);
+    setError(null);
     const code = BRANCH_NAME_TO_CODE[branch];
     if (code) {
       fetchFacilitators(code);
       fetchProgramNames(code);
-      autoLoadBranch(code);
     } else {
       setFacilitatorList([]);
       setProgramNameList([]);
-      setSessions(null);
-      setHasQueried(false);
     }
   };
 
@@ -372,14 +351,9 @@ const ProgrammingQuery: React.FC<ProgrammingQueryProps> = ({
     setError(null);
     setFacilitatorOpen(false);
     setProgramNameOpen(false);
-    const code = BRANCH_NAME_TO_CODE[internalBranch];
-    if (code) {
-      autoLoadBranch(code);
-    } else {
-      setSessions(null);
-      setTotal(0);
-      setHasQueried(false);
-    }
+    setSessions(null);
+    setTotal(0);
+    setHasQueried(false);
   };
 
   const inputClass =

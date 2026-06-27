@@ -27,6 +27,15 @@ vi.mock("../components/ProgrammingQuery", () => ({
   ),
 }));
 
+vi.mock("../components/ProgrammingStatsTable", () => ({
+  default: ({ selectedBranch }: { selectedBranch: string }) => (
+    <div
+      data-testid="mock-programming-stats-table"
+      data-selected-branch={selectedBranch}
+    />
+  ),
+}));
+
 vi.mock("../components/BranchSelector", () => ({
   default: ({
     branches,
@@ -123,6 +132,32 @@ describe("Programming Page", () => {
     mockFetchBranches([]);
     render(<Programming />);
     expect(screen.getByTestId("mock-programming-charts")).toBeInTheDocument();
+  });
+
+  it("renders the Monthly Stats section heading", () => {
+    mockFetchBranches([]);
+    render(<Programming />);
+    expect(
+      screen.getByRole("heading", { name: "Monthly Stats", level: 2 }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the ProgrammingStatsTable component", () => {
+    mockFetchBranches([]);
+    render(<Programming />);
+    expect(
+      screen.getByTestId("mock-programming-stats-table"),
+    ).toBeInTheDocument();
+  });
+
+  it("passes selectedBranch to ProgrammingStatsTable", async () => {
+    mockFetchBranches(["Imaginon"]);
+    render(<Programming />);
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("mock-programming-stats-table").dataset.selectedBranch,
+      ).toBe("Imaginon"),
+    );
   });
 
   it("renders the Query Sessions section heading", () => {

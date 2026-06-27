@@ -4,6 +4,7 @@ import type { Answer } from "../types/index";
 import BranchSelector from "../components/BranchSelector";
 import ProgrammingCharts from "../components/ProgrammingCharts";
 import ProgrammingQuery from "../components/ProgrammingQuery";
+import ProgrammingStatsTable from "../components/ProgrammingStatsTable";
 import QuestionsSection from "../components/QuestionsSection";
 
 const Programming: React.FC = () => {
@@ -86,8 +87,22 @@ const Programming: React.FC = () => {
         </div>
       </section>
 
+      {/* Monthly Stats Table */}
+      <section className="py-12 px-8 bg-white border-t border-gray-200">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Monthly Stats
+          </h2>
+          <p className="text-gray-600 mb-6">
+            Month-by-month attendance and programs for {selectedBranch}. Arrows
+            show change vs. the prior month.
+          </p>
+          <ProgrammingStatsTable selectedBranch={selectedBranch} />
+        </div>
+      </section>
+
       {/* Query Sessions */}
-      <section className="py-16 px-8 bg-white border-t border-gray-200">
+      <section className="py-16 px-8 bg-gray-50 border-t border-gray-200">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
             Query Sessions
