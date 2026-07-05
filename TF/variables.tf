@@ -85,6 +85,13 @@ variable "programming_lambda_timeout" {
   default     = 60
 }
 
+# ── Time Series Lambda variables ─────────────────────────────────────────────
+variable "circulation_s3_bucket_name " {
+  description = "s3 circulation bucket"
+  type        = string
+  default     = ""
+}
+
 # ── DynamoDB Configuration ───────────────────────────────────────────────────
 
 variable "dynamodb_billing_mode" {
