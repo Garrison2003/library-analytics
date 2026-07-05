@@ -86,6 +86,7 @@ variable "programming_lambda_timeout" {
 }
 
 # ── Time Series Lambda variables ─────────────────────────────────────────────
+
 variable "circulation_s3_bucket_name" {
   description = "s3 circulation bucket"
   type        = string

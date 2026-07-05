@@ -1,17 +1,30 @@
-# ── Existing: Time Series Lambda ─────────────────────────────────────────────
+# ── Time Series Lambda ────────────────────────────────────────────────────────
+
+# Layer: numpy/pandas/matplotlib/openpyxl for time series chart generation
+# Built by the CI "Build Time Series Lambda Layer" step; zip placed at TF/time_series_layer.zip
+resource "aws_lambda_layer_version" "time_series_deps" {
+  layer_name          = "${var.project_name}-time-series-deps"
+  filename            = "time_series_layer.zip"
+  compatible_runtimes = ["python3.12"]
+  description         = "numpy, pandas, matplotlib, openpyxl for time series processing"
+  source_code_hash    = filebase64sha256("time_series_layer.zip")
+}
 
 resource "aws_lambda_function" "time_series_lambda" {
-  filename      = "lambda_function_payload.zip"
-  function_name = "time_series_lambda"
-  role          = aws_iam_role.time_series_lambda.arn
-  handler       = "index.handler"
-  runtime       = "python3.12"
+  filename         = "lambda_function_payload.zip"
+  function_name    = "time_series_lambda"
+  role             = aws_iam_role.time_series_lambda.arn
+  handler          = "lambda_handler.handler"
+  runtime          = "python3.12"
+  memory_size      = 1024
+  timeout          = 120
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  layers           = [aws_lambda_layer_version.time_series_deps.arn]
 
-   environment {
+  environment {
     variables = {
-      CIRULATION_BUCKET = aws_s3_bucket.circulation.id
-      CIRCULATION_FILE_KEY = var.circulation_upload_prefix
+      CIRCULATION_BUCKET = aws_s3_bucket.circulation.id
+      CIRCULATION_PREFIX = var.circulation_upload_prefix
     }
   }
 }
