@@ -23,7 +23,7 @@ cd lambdas/uploadHandlerLambda && python -m pytest tests/ -v
 cd lambdas/programmingDataParser && python -m pytest tests/ -v
 cd lambdas/programmingHistoryAPI && python -m pytest tests/ -v
 ```
-Python test dependencies: `pip install pytest openpyxl boto3 botocore`
+Python test dependencies: `pip install pytest openpyxl boto3 botocore numpy pandas matplotlib`
 
 ### TypeScript Lambda (run from `lambdas/timeSeriesLambda/`)
 ```bash
@@ -43,7 +43,7 @@ This is a library circulation analytics platform. The data flow is:
 ### Key boundaries
 
 - **Frontend** (`frontend/src/`): React 19 + TypeScript + Tailwind. Pages live in `pages/`, reusable UI in `components/`, all API calls go through the singleton `apiClient` in `services/api.ts`. Auth0 wraps the entire app in `App.tsx`.
-- **Lambdas** (`lambdas/`): Each lambda is independent — Python lambdas are single-file, the TypeScript lambda (`timeSeriesLambda/index.py` is actually Python; the TS source is compiled to JS for deployment).
+- **Lambdas** (`lambdas/`): Each lambda is independent — Python lambdas are single-file. `timeSeriesLambda` uses `lambda_handler.py` (Python) as the entry point; `index.ts` is a leftover stub and not deployed.
 - **Infrastructure** (`TF/`): Terraform manages all AWS resources. Lambda zips are built by CI and placed into `TF/` before `terraform apply` runs. Do not run Terraform locally against prod/dev — changes deploy through GitHub Actions on push to `main` (prod) or `dev` (dev environment).
 
 ### Frontend type system

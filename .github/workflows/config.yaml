@@ -45,7 +45,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install Lambda test dependencies
-        run: pip install pytest openpyxl pdfplumber boto3 botocore "python-jose[cryptography]"
+        run: pip install pytest openpyxl pdfplumber boto3 botocore "python-jose[cryptography]" numpy pandas matplotlib
 
       - name: Test – Circulation Lambda
         run: cd lambdas/circulationLambda && python -m pytest tests/ -v
