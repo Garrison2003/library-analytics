@@ -118,15 +118,6 @@ jobs:
       # ── Lambda builds ───────────────────────────────────────────────────────
       # Zips are placed inside TF/ so they are available during terraform apply.
 
-      - name: Build Time Series Lambda Layer
-        run: |
-          mkdir -p /tmp/ts_layer/python
-          # --no-deps excludes numpy (provided by the AWSSDKPandas layer at runtime)
-          pip install matplotlib --no-deps -t /tmp/ts_layer/python --quiet
-          pip install fonttools kiwisolver pillow pyparsing cycler contourpy packaging \
-            -t /tmp/ts_layer/python --quiet
-          cd /tmp/ts_layer && zip -r "$GITHUB_WORKSPACE/TF/time_series_layer.zip" python
-
       - name: Build Circulation Lambda
         run: |
           zip -j TF/circulation_lambda_payload.zip \

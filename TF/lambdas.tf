@@ -1,16 +1,5 @@
 # ── Time Series Lambda ────────────────────────────────────────────────────────
 
-# Layer: matplotlib only — numpy/pandas come from the AWS-managed AWSSDKPandas layer,
-# openpyxl comes from the shared openpyxl layer.
-# Built by the CI "Build Time Series Lambda Layer" step; zip placed at TF/time_series_layer.zip
-resource "aws_lambda_layer_version" "time_series_deps" {
-  layer_name          = "${var.project_name}-time-series-deps"
-  filename            = "time_series_layer.zip"
-  compatible_runtimes = ["python3.12"]
-  description         = "matplotlib for time series chart generation"
-  source_code_hash    = filebase64sha256("time_series_layer.zip")
-}
-
 resource "aws_lambda_function" "time_series_lambda" {
   filename         = "lambda_function_payload.zip"
   function_name    = "time_series_lambda"
@@ -22,8 +11,8 @@ resource "aws_lambda_function" "time_series_lambda" {
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   layers = [
     var.aws_sdk_pandas_layer_arn,
-    aws_lambda_layer_version.openpyxl.arn,
-    aws_lambda_layer_version.time_series_deps.arn,
+    var.openpyxl_layer_arn,
+    var.matplotlib_layer_arn,
   ]
 
   environment {
