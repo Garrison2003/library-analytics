@@ -8,11 +8,72 @@ on:
 
 env:
   TFC_TOKEN: ${{ secrets.tfc_team_token }}
+  AWS_REGION: us-east-1
+
+# ── Test ──────────────────────────────────────────────────────────────────────
+# Runs on every push; deploy job only starts if tests pass.
 
 jobs:
-  Terraform:
-    name: "Terraform"
+  test:
+    name: "Test"
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Frontend – Install & Test
+        run: |
+          cd frontend
+          npm ci
+          npm test -- --run
+
+      - name: MCP Server – Install & Test
+        run: |
+          cd mcp-server
+          npm ci
+          npm test -- --run
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Lambda test dependencies
+        run: pip install pytest openpyxl pdfplumber boto3 botocore "python-jose[cryptography]"
+
+      - name: Test – Circulation Lambda
+        run: cd lambdas/circulationLambda && python -m pytest tests/ -v
+
+      - name: Test – Time Series Lambda
+        run: cd lambdas/timeSeriesLambda && python -m pytest tests/ -v
+
+      - name: Test – Upload Handler Lambda
+        run: cd lambdas/uploadHandlerLambda && python -m pytest tests/ -v
+
+      - name: Test – programmingDataParser Lambda
+        run: cd lambdas/programmingDataParser && python -m pytest tests/ -v
+
+      - name: Test – programmingHistoryAPI Lambda
+        run: cd lambdas/programmingHistoryAPI && python -m pytest tests/ -v
+
+      - name: Test – API Authorizer Lambda
+        run: cd lambdas/apiAuthorizer && python -m pytest tests/ -v
+
+# ── Deploy ────────────────────────────────────────────────────────────────────
+
+  deploy:
+    name: "Build and Deploy"
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     environment:
       name: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
 
@@ -20,54 +81,178 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set Workspace Variables
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "WORKSPACE_ID=ws-prod-1a2b3c4d" >> $GITHUB_ENV
+            echo "TF_WORKSPACE=library-analytics-prod" >> $GITHUB_ENV
+            echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+            echo "S3_BUCKET=library-analytics-frontend-prod" >> $GITHUB_ENV
+            echo "DOMAIN_NAME=library-analytics.com" >> $GITHUB_ENV
+            echo "AUTH0_DOMAIN=${{ secrets.AUTH0_DOMAIN_PROD }}" >> $GITHUB_ENV
+            echo "AUTH0_CLIENT_ID=${{ secrets.AUTH0_CLIENT_ID_PROD }}" >> $GITHUB_ENV
+            echo "AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE_PROD }}" >> $GITHUB_ENV
+          else
+            echo "WORKSPACE_ID=ws-YYMkyfZzJJ1bRt8d" >> $GITHUB_ENV
+            echo "TF_WORKSPACE=library-analytics-dev" >> $GITHUB_ENV
+            echo "ENVIRONMENT=dev" >> $GITHUB_ENV
+            echo "S3_BUCKET=library-analytics-frontend-dev" >> $GITHUB_ENV
+            echo "DOMAIN_NAME=library-analytics-dev.com" >> $GITHUB_ENV
+            echo "AUTH0_DOMAIN=${{ secrets.AUTH0_DOMAIN_DEV }}" >> $GITHUB_ENV
+            echo "AUTH0_CLIENT_ID=${{ secrets.AUTH0_CLIENT_ID_DEV }}" >> $GITHUB_ENV
+            echo "AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE_DEV }}" >> $GITHUB_ENV
+          fi
+        shell: bash
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.aws_role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Python for Lambda
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # ── Lambda builds ───────────────────────────────────────────────────────
+      # Zips are placed inside TF/ so they are available during terraform apply.
+
+      - name: Build Time Series Lambda
+        run: |
+          cd lambdas/timeSeriesLambda
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt -t .
+          fi
+          zip -r ../../TF/lambda_function_payload.zip . \
+            -x "*.git*" -x "*__pycache__*" -x "*.pyc" \
+            -x "node_modules/*" -x "*.ts" -x "tests/*"
+
+      - name: Build Circulation Lambda
+        run: |
+          zip -j TF/circulation_lambda_payload.zip \
+            lambdas/circulationLambda/lambda_function.py
+
+      - name: Build Upload Handler Lambda
+        run: |
+          zip -j TF/upload_handler_lambda.zip \
+            lambdas/uploadHandlerLambda/upload_handler_lambda.py
+
+      - name: Build programmingDataParser Lambda
+        run: |
+          zip -j TF/programming_data_parser_lambda.zip \
+            lambdas/programmingDataParser/programming_data_parser_lambda.py
+
+      - name: Build programmingHistoryAPI Lambda
+        run: |
+          zip -j TF/programming_history_api_lambda.zip \
+            lambdas/programmingHistoryAPI/programming_history_api_lambda.py
+
+      - name: Build MCP Server Lambda
+        run: |
+          cd mcp-server
+          npm ci
+          npm run build
+          npm prune --omit=dev
+          zip -r ../TF/mcp_server_lambda.zip dist/ node_modules/ package.json
+
+      - name: Build API Authorizer Lambda
+        run: |
+          mkdir -p lambdas/apiAuthorizer/package
+          pip install -r lambdas/apiAuthorizer/requirements.txt \
+            -t lambdas/apiAuthorizer/package --quiet
+          cp lambdas/apiAuthorizer/api_authorizer_lambda.py \
+            lambdas/apiAuthorizer/package/
+          cd lambdas/apiAuthorizer/package && zip -r ../../../TF/api_authorizer_lambda.zip .
+
+      - name: Build Dependencies Layer
+        run: |
+          mkdir -p lambdas/circulationLambda/build/layer/python
+          pip install \
+            -r lambdas/circulationLambda/layer/requirements.txt \
+            -t lambdas/circulationLambda/build/layer/python \
+            --quiet
+          cd lambdas/circulationLambda/build/layer
+          zip -r ../../../../TF/openpyxl_layer.zip python
+
+      # ── Terraform ───────────────────────────────────────────────────────────
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           cli_config_credentials_token: ${{ secrets.tfc_team_token }}
 
-      - name: Set Workspace Variables
-        run: |
-          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
-            echo "WORKSPACE_ID=ws-prod-1a2b3c4d" >> $GITHUB_ENV
-            echo "ENVIRONMENT=prod" >> $GITHUB_ENV
-          else
-            # Workspace: library-analytics-dev (TuwaAnalytics org)
-            echo "WORKSPACE_ID=ws-YYMkyfZzJJ1bRt8d" >> $GITHUB_ENV
-            echo "ENVIRONMENT=dev" >> $GITHUB_ENV
-          fi
-        shell: bash
-
       - name: Terraform Init
-        run: |
-          cd TF
-          terraform init
+        run: cd TF && terraform init
+        env:
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
+          TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
+          TF_VAR_auth0_domain: ${{ env.AUTH0_DOMAIN }}
+          TF_VAR_auth0_audience: ${{ env.AUTH0_AUDIENCE }}
 
       - name: Terraform Validate
-        run: |
-          cd TF
-          terraform validate
+        run: cd TF && terraform validate
+        env:
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
+          TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
+          TF_VAR_auth0_domain: ${{ env.AUTH0_DOMAIN }}
+          TF_VAR_auth0_audience: ${{ env.AUTH0_AUDIENCE }}
 
-      - name: Terraform Apply via Cloud API
+      - name: Terraform Plan
+        run: cd TF && terraform plan
+        env:
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
+          TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
+          TF_VAR_auth0_domain: ${{ env.AUTH0_DOMAIN }}
+          TF_VAR_auth0_audience: ${{ env.AUTH0_AUDIENCE }}
+
+      - name: Terraform Apply
+        run: cd TF && terraform apply -auto-approve
+        env:
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
+          TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
+          TF_VAR_auth0_domain: ${{ env.AUTH0_DOMAIN }}
+          TF_VAR_auth0_audience: ${{ env.AUTH0_AUDIENCE }}
+
+      - name: Read Terraform Outputs
         run: |
-          curl --silent --fail \
-            --location --request POST 'https://app.terraform.io/api/v2/runs' \
-            --header "Authorization: Bearer $TFC_TOKEN" \
-            --header 'Content-Type: application/vnd.api+json' \
-            --data-raw '{
-              "data": {
-                "attributes": {
-                  "auto-apply": true,
-                  "message": "Auto-apply triggered by GitHub Actions - '"$ENVIRONMENT"' deployment"
-                },
-                "type": "runs",
-                "relationships": {
-                  "workspace": {
-                    "data": {
-                      "type": "workspaces",
-                      "id": "'"$WORKSPACE_ID"'"
-                    }
-                  }
-                }
-              }
-            }'
-        shell: bash
+          echo "TF_S3_BUCKET=$(cd TF && terraform output -raw s3_bucket_name)" >> $GITHUB_ENV
+          echo "TF_DISTRIBUTION_ID=$(cd TF && terraform output -raw cloudfront_distribution_id)" >> $GITHUB_ENV
+          echo "TF_API_URL=$(cd TF && terraform output -raw circulation_api_base_url)" >> $GITHUB_ENV
+        env:
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
+          TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
+
+      # ── Frontend build & deploy ─────────────────────────────────────────────
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build React App
+        run: |
+          cd frontend
+          npm install
+          VITE_AUTH0_DOMAIN=${{ env.AUTH0_DOMAIN }} \
+          VITE_AUTH0_CLIENT_ID=${{ env.AUTH0_CLIENT_ID }} \
+          VITE_AUTH0_AUDIENCE=${{ env.AUTH0_AUDIENCE }} \
+          VITE_API_URL=${{ env.TF_API_URL }} \
+          npm run build
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync frontend/dist/ s3://${{ env.TF_S3_BUCKET }}/ \
+            --delete \
+            --cache-control "max-age=3600"
+          aws s3 cp s3://${{ env.TF_S3_BUCKET }}/index.html \
+            s3://${{ env.TF_S3_BUCKET }}/index.html \
+            --content-type "text/html" \
+            --cache-control "no-cache, no-store, must-revalidate" \
+            --metadata-directive REPLACE
+
+      - name: Invalidate CloudFront Cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ env.TF_DISTRIBUTION_ID }} \
+            --paths "/*"
