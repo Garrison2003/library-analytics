@@ -90,8 +90,8 @@ variable "programming_lambda_timeout" {
 variable "dynamodb_billing_mode" {
   description = "DynamoDB billing mode: PAY_PER_REQUEST (recommended) or PROVISIONED"
   type        = string
-  default     = "PAY_PER_REQUEST"  # Auto-scales, no capacity planning needed
-  
+  default     = "PAY_PER_REQUEST" # Auto-scales, no capacity planning needed
+
   validation {
     condition     = contains(["PAY_PER_REQUEST", "PROVISIONED"], var.dynamodb_billing_mode)
     error_message = "Billing mode must be either PAY_PER_REQUEST or PROVISIONED."
@@ -102,43 +102,31 @@ variable "dynamodb_billing_mode" {
 variable "dynamodb_read_capacity" {
   description = "Read capacity units for programming_data table (if using PROVISIONED mode)"
   type        = number
-  default     = 200  # Handles ~50 concurrent users
+  default     = 200 # Handles ~50 concurrent users
 }
 
 variable "dynamodb_write_capacity" {
   description = "Write capacity units for programming_data table (if using PROVISIONED mode)"
   type        = number
-  default     = 5    # Handles monthly uploads + updates
+  default     = 5 # Handles monthly uploads + updates
 }
 
 variable "dynamodb_gsi_read_capacity" {
   description = "Read capacity units for DateIndex GSI (if using PROVISIONED mode)"
   type        = number
-  default     = 100  # Handles branch comparisons
+  default     = 100 # Handles branch comparisons
 }
 
 variable "dynamodb_gsi_write_capacity" {
   description = "Write capacity units for DateIndex GSI (if using PROVISIONED mode)"
   type        = number
-  default     = 5    # Same as main table
-}
-
-variable "dynamodb_metadata_read_capacity" {
-  description = "Read capacity units for branch_metadata table (if using PROVISIONED mode)"
-  type        = number
-  default     = 10   # Low traffic
-}
-
-variable "dynamodb_metadata_write_capacity" {
-  description = "Write capacity units for branch_metadata table (if using PROVISIONED mode)"
-  type        = number
-  default     = 5    # Updates on each upload
+  default     = 5 # Same as main table
 }
 
 variable "dynamodb_enable_ttl" {
   description = "Enable Time-to-Live to auto-delete data older than specified age"
   type        = bool
-  default     = false  # Set to true if you want auto-deletion
+  default     = false # Set to true if you want auto-deletion
 }
 
 variable "dynamodb_retention_years" {
@@ -151,4 +139,27 @@ variable "create_dynamodb_api_role" {
   description = "Whether to create an IAM role for API Gateway direct DynamoDB access"
   type        = bool
   default     = false
+}
+
+# ── Anthropic ────────────────────────────────────────────────────────────────
+
+variable "anthropic_api_key" {
+  description = "Anthropic Claude API key, stored in Secrets Manager by Terraform"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+# ── Auth0 ────────────────────────────────────────────────────────────────────
+
+variable "auth0_domain" {
+  description = "Auth0 tenant domain (e.g. your-tenant.us.auth0.com)"
+  type        = string
+  default     = ""
+}
+
+variable "auth0_audience" {
+  description = "Auth0 API audience identifier (must match VITE_AUTH0_AUDIENCE)"
+  type        = string
+  default     = ""
 }

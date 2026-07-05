@@ -14,3 +14,20 @@ __pycache__/
 
 # Claude Code local settings (per-developer, not shared)
 .claude/settings.local.json
+
+# VS Code local settings (per-developer, not shared)
+.vscode/
+
+# Node
+node_modules/
+dist/
+*.js.map
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*

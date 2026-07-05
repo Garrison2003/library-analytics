@@ -69,7 +69,7 @@ describe("getAvailableFileTypes", () => {
 describe("isValidFileExtension", () => {
   it("returns true for xlsm", () => expect(isValidFileExtension("data.xlsm")).toBe(true));
   it("returns true for xlsx", () => expect(isValidFileExtension("data.xlsx")).toBe(true));
-  it("returns false for pdf", () => expect(isValidFileExtension("report.pdf")).toBe(false));
+  it("returns true for pdf (programs type accepts PDFs)", () => expect(isValidFileExtension("report.pdf")).toBe(true));
   it("returns false for csv", () => expect(isValidFileExtension("data.csv")).toBe(false));
   it("returns false for txt", () => expect(isValidFileExtension("notes.txt")).toBe(false));
   it("returns false for no extension", () => expect(isValidFileExtension("nodot")).toBe(false));
@@ -84,8 +84,8 @@ describe("getFileConfigByExtension", () => {
   it("resolves xlsx to circulation", () =>
     expect(getFileConfigByExtension("data.xlsx")?.id).toBe("circulation"));
 
-  it("returns null for pdf (no longer accepted by any type)", () =>
-    expect(getFileConfigByExtension("report.pdf")).toBeNull());
+  it("resolves pdf to programs type", () =>
+    expect(getFileConfigByExtension("report.pdf")?.id).toBe("programs"));
 
   it("returns null for unsupported extensions", () =>
     expect(getFileConfigByExtension("data.csv")).toBeNull());
@@ -131,8 +131,9 @@ describe("FILE_CONFIGURATIONS", () => {
   describe("programs", () => {
     const cfg = FILE_CONFIGURATIONS.programs;
 
-    it("allows xlsx only", () => {
-      expect(cfg.allowedExtensions).toEqual(["xlsx"]);
+    it("allows xlsx and pdf", () => {
+      expect(cfg.allowedExtensions).toContain("xlsx");
+      expect(cfg.allowedExtensions).toContain("pdf");
     });
 
     it("has a 20 MB size limit", () => {
@@ -233,7 +234,7 @@ describe("validateProgramFile", () => {
     });
     const result = await validate(file);
     expect(result.valid).toBe(false);
-    expect(result.error).toMatch(/department code/i);
+    expect(result.error).toMatch(/branch code/i);
   });
 
   it("rejects a file exceeding 20 MB", async () => {
@@ -244,5 +245,47 @@ describe("validateProgramFile", () => {
     const result = await validate(file);
     expect(result.valid).toBe(false);
     expect(result.error).toMatch(/too large/i);
+  });
+
+  it("accepts a valid In-House PDF with a known branch name", async () => {
+    const file = new File(["data"], "Spangler_In-House_Programs_April_2026.pdf", {
+      type: "application/pdf",
+    });
+    const result = await validate(file);
+    expect(result.valid).toBe(true);
+  });
+
+  it("accepts a valid Outreach PDF with a known branch name", async () => {
+    const file = new File(["data"], "Imaginon_Outreach_Programs_March_2026.pdf", {
+      type: "application/pdf",
+    });
+    const result = await validate(file);
+    expect(result.valid).toBe(true);
+  });
+
+  it("rejects a PDF missing a known branch name", async () => {
+    const file = new File(["data"], "Unknown_In-House_Programs_April_2026.pdf", {
+      type: "application/pdf",
+    });
+    const result = await validate(file);
+    expect(result.valid).toBe(false);
+    expect(result.error).toMatch(/branch name/i);
+  });
+
+  it("rejects a PDF missing in-house or outreach in the filename", async () => {
+    const file = new File(["data"], "Spangler_Programs_April_2026.pdf", {
+      type: "application/pdf",
+    });
+    const result = await validate(file);
+    expect(result.valid).toBe(false);
+    expect(result.error).toMatch(/branch name/i);
+  });
+
+  it("rejects a PDF with wrong MIME type", async () => {
+    const file = new File(["data"], "Spangler_In-House_Programs_April_2026.pdf", {
+      type: "text/plain",
+    });
+    const result = await validate(file);
+    expect(result.valid).toBe(false);
   });
 });

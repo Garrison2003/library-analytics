@@ -33,13 +33,19 @@ jobs:
           npm ci
           npm test -- --run
 
+      - name: MCP Server – Install & Test
+        run: |
+          cd mcp-server
+          npm ci
+          npm test -- --run
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install Lambda test dependencies
-        run: pip install pytest openpyxl boto3 botocore
+        run: pip install pytest openpyxl pdfplumber boto3 botocore "python-jose[cryptography]"
 
       - name: Test – Circulation Lambda
         run: cd lambdas/circulationLambda && python -m pytest tests/ -v
@@ -50,11 +56,14 @@ jobs:
       - name: Test – Upload Handler Lambda
         run: cd lambdas/uploadHandlerLambda && python -m pytest tests/ -v
 
-      - name: Test – programmingAPI Lambda
+      - name: Test – programmingDataParser Lambda
         run: cd lambdas/programmingDataParser && python -m pytest tests/ -v
 
-      - name: Test – programmingDataParser Lambda
+      - name: Test – programmingHistoryAPI Lambda
         run: cd lambdas/programmingHistoryAPI && python -m pytest tests/ -v
+
+      - name: Test – API Authorizer Lambda
+        run: cd lambdas/apiAuthorizer && python -m pytest tests/ -v
 
 # ── Deploy ────────────────────────────────────────────────────────────────────
 
@@ -108,8 +117,6 @@ jobs:
 
       # ── Lambda builds ───────────────────────────────────────────────────────
       # Zips are placed inside TF/ so they are available during terraform apply.
-      # The null_resource.build_openpyxl_layer local-exec runs pip install for
-      # the openpyxl layer during apply (requires local execution mode in HCP TF).
 
       - name: Build Time Series Lambda
         run: |
@@ -131,24 +138,40 @@ jobs:
           zip -j TF/upload_handler_lambda.zip \
             lambdas/uploadHandlerLambda/upload_handler_lambda.py
 
-      - name: Build programmingAPI Lambda
+      - name: Build programmingDataParser Lambda
         run: |
           zip -j TF/programming_data_parser_lambda.zip \
             lambdas/programmingDataParser/programming_data_parser_lambda.py
 
-      - name: Build programmingDataParser Lambda
+      - name: Build programmingHistoryAPI Lambda
         run: |
           zip -j TF/programming_history_api_lambda.zip \
             lambdas/programmingHistoryAPI/programming_history_api_lambda.py
 
-      - name: Build openpyxl Layer
+      - name: Build MCP Server Lambda
+        run: |
+          cd mcp-server
+          npm ci
+          npm run build
+          npm prune --omit=dev
+          zip -r ../TF/mcp_server_lambda.zip dist/ node_modules/ package.json
+
+      - name: Build API Authorizer Lambda
+        run: |
+          mkdir -p lambdas/apiAuthorizer/package
+          pip install -r lambdas/apiAuthorizer/requirements.txt \
+            -t lambdas/apiAuthorizer/package --quiet
+          cp lambdas/apiAuthorizer/api_authorizer_lambda.py \
+            lambdas/apiAuthorizer/package/
+          cd lambdas/apiAuthorizer/package && zip -r ../../../TF/api_authorizer_lambda.zip .
+
+      - name: Build Dependencies Layer
         run: |
           mkdir -p lambdas/circulationLambda/build/layer/python
           pip install \
             -r lambdas/circulationLambda/layer/requirements.txt \
             -t lambdas/circulationLambda/build/layer/python \
-            --quiet \
-            --only-binary=:all:
+            --quiet
           cd lambdas/circulationLambda/build/layer
           zip -r ../../../../TF/openpyxl_layer.zip python
 
@@ -164,24 +187,32 @@ jobs:
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
+          TF_VAR_auth0_domain: ${{ env.AUTH0_DOMAIN }}
+          TF_VAR_auth0_audience: ${{ env.AUTH0_AUDIENCE }}
 
       - name: Terraform Validate
         run: cd TF && terraform validate
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
+          TF_VAR_auth0_domain: ${{ env.AUTH0_DOMAIN }}
+          TF_VAR_auth0_audience: ${{ env.AUTH0_AUDIENCE }}
 
       - name: Terraform Plan
         run: cd TF && terraform plan
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
+          TF_VAR_auth0_domain: ${{ env.AUTH0_DOMAIN }}
+          TF_VAR_auth0_audience: ${{ env.AUTH0_AUDIENCE }}
 
       - name: Terraform Apply
         run: cd TF && terraform apply -auto-approve
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
+          TF_VAR_auth0_domain: ${{ env.AUTH0_DOMAIN }}
+          TF_VAR_auth0_audience: ${{ env.AUTH0_AUDIENCE }}
 
       - name: Read Terraform Outputs
         run: |

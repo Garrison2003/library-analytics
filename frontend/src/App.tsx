@@ -1,9 +1,11 @@
 // src/App.tsx
 import { useState } from "react";
 import { Auth0Provider, useAuth0 } from "@auth0/auth0-react";
+import { apiClient } from "./services/api";
 import Homepage from "./pages/Homepage";
 import MonthlyAnalytics from "./pages/MonthlyAnalytics";
 import DailyAnalytics from "./pages/DailyAnalytics";
+import Programming from "./pages/Programming";
 import Upload from "./components/Upload";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
@@ -25,8 +27,17 @@ const auth0Audience = import.meta.env.VITE_AUTH0_AUDIENCE as string | undefined;
  * Navigation is via a horizontal tab bar (Dashboard, Monthly, Daily, Upload).
  */
 function AppContent() {
-  const { isLoading, isAuthenticated, error, user } = useAuth0();
+  const { isLoading, isAuthenticated, error, user, getAccessTokenSilently } = useAuth0();
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
+
+  // Must be set in render (not useEffect) so children's useEffect hooks see it on first mount.
+  if (isAuthenticated) {
+    apiClient.setTokenGetter(() =>
+      getAccessTokenSilently({
+        authorizationParams: { audience: auth0Audience },
+      }),
+    );
+  }
 
   if (isLoading) {
     return (
@@ -70,6 +81,8 @@ function AppContent() {
         return (
           <DailyAnalytics onBackHome={() => handleTabChange("dashboard")} />
         );
+      case "programming":
+        return <Programming />;
       case "upload":
         return <Upload onBackHome={() => handleTabChange("dashboard")} />;
       case "dashboard":

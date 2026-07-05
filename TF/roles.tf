@@ -194,25 +194,38 @@ resource "aws_iam_role_policy" "programming_history_lambda" {
           "dynamodb:GetItem",
           "dynamodb:Scan"
         ]
-        Resource = [
-          aws_dynamodb_table.programming_data.arn,
-          aws_dynamodb_table.branch_metadata.arn
-        ]
+        Resource = aws_dynamodb_table.programming_data.arn
       },
       {
-        Sid    = "DynamoDBGSI"
+        Sid      = "DynamoDBGSI"
+        Effect   = "Allow"
+        Action   = ["dynamodb:Query"]
+        Resource = "${aws_dynamodb_table.programming_data.arn}/index/DateIndex"
+      },
+      {
+        Sid    = "DynamoDBSessionsRead"
+        Effect = "Allow"
+        Action = ["dynamodb:Query", "dynamodb:GetItem", "dynamodb:Scan"]
+        Resource = aws_dynamodb_table.program_sessions.arn
+      },
+      {
+        Sid    = "DynamoDBSessionsGSIRead"
         Effect = "Allow"
         Action = ["dynamodb:Query"]
-        Resource = "${aws_dynamodb_table.programming_data.arn}/index/DateIndex"
+        Resource = [
+          "${aws_dynamodb_table.program_sessions.arn}/index/FacilitatorIndex",
+          "${aws_dynamodb_table.program_sessions.arn}/index/ProgramNameIndex",
+          "${aws_dynamodb_table.program_sessions.arn}/index/ProgramDateIndex",
+        ]
       }
     ]
   })
 }
 
-# ── programmingAPI Lambda role ────────────────────────────────────────────────
+# ── programmingDataParser Lambda role ────────────────────────────────────────────────
 
-resource "aws_iam_role" "programmingAPI" {
-  name = "${var.project_name}-programmingAPI-${var.environment}"
+resource "aws_iam_role" "programmingDataParser" {
+  name = "${var.project_name}-programmingDataParser-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -228,9 +241,9 @@ resource "aws_iam_role" "programmingAPI" {
   })
 }
 
-resource "aws_iam_role_policy" "programmingAPI" {
-  name = "${var.project_name}-programmingAPI-policy"
-  role = aws_iam_role.programmingAPI.id
+resource "aws_iam_role_policy" "programmingDataParser" {
+  name = "${var.project_name}-programmingDataParser-policy"
+  role = aws_iam_role.programmingDataParser.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -270,9 +283,9 @@ resource "aws_iam_role_policy" "programmingAPI" {
         Resource = "${aws_s3_bucket.circulation.arn}/processed/programming/*"
       },
       {
-        Sid      = "DynamoDBProgrammingDataWrite"
-        Effect   = "Allow"
-        Action   = [
+        Sid    = "DynamoDBProgrammingDataWrite"
+        Effect = "Allow"
+        Action = [
           "dynamodb:PutItem",
           "dynamodb:UpdateItem",
           "dynamodb:BatchWriteItem"
@@ -280,9 +293,9 @@ resource "aws_iam_role_policy" "programmingAPI" {
         Resource = aws_dynamodb_table.programming_data.arn
       },
       {
-        Sid      = "DynamoDBProgrammingDataRead"
-        Effect   = "Allow"
-        Action   = [
+        Sid    = "DynamoDBProgrammingDataRead"
+        Effect = "Allow"
+        Action = [
           "dynamodb:Query",
           "dynamodb:GetItem",
           "dynamodb:Scan"
@@ -296,23 +309,23 @@ resource "aws_iam_role_policy" "programmingAPI" {
         Resource = "${aws_dynamodb_table.programming_data.arn}/index/DateIndex"
       },
       {
-        Sid      = "DynamoDBMetadataWrite"
-        Effect   = "Allow"
-        Action   = [
+        Sid    = "DynamoDBSessionsWrite"
+        Effect = "Allow"
+        Action = [
           "dynamodb:PutItem",
-          "dynamodb:UpdateItem"
+          "dynamodb:BatchWriteItem"
         ]
-        Resource = aws_dynamodb_table.branch_metadata.arn
+        Resource = aws_dynamodb_table.program_sessions.arn
       },
       {
-        Sid      = "DynamoDBMetadataRead"
-        Effect   = "Allow"
-        Action   = [
-          "dynamodb:GetItem",
-          "dynamodb:Query",
-          "dynamodb:Scan"
+        Sid    = "DynamoDBSessionsGSI"
+        Effect = "Allow"
+        Action = ["dynamodb:Query"]
+        Resource = [
+          "${aws_dynamodb_table.program_sessions.arn}/index/FacilitatorIndex",
+          "${aws_dynamodb_table.program_sessions.arn}/index/ProgramNameIndex",
+          "${aws_dynamodb_table.program_sessions.arn}/index/ProgramDateIndex",
         ]
-        Resource = aws_dynamodb_table.branch_metadata.arn
       }
     ]
   })
@@ -356,7 +369,6 @@ resource "aws_iam_role_policy" "dynamodb_api_access" {
         Resource = [
           aws_dynamodb_table.programming_data.arn,
           "${aws_dynamodb_table.programming_data.arn}/index/DateIndex",
-          aws_dynamodb_table.branch_metadata.arn
         ]
       }
     ]

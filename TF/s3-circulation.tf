@@ -64,7 +64,20 @@ resource "aws_lambda_permission" "s3_invoke_circulation" {
   source_account = data.aws_caller_identity.current.account_id
 }
 
-resource "aws_s3_bucket_notification" "circulation_trigger" {
+# ── S3 → Programming Lambda trigger ──────────────────────────────────────────
+
+resource "aws_lambda_permission" "s3_invoke_programming" {
+  statement_id   = "AllowS3InvokeProgramming"
+  action         = "lambda:InvokeFunction"
+  function_name  = aws_lambda_function.programmingDataParser.function_name
+  principal      = "s3.amazonaws.com"
+  source_arn     = aws_s3_bucket.circulation.arn
+  source_account = data.aws_caller_identity.current.account_id
+}
+
+# A bucket can only have one aws_s3_bucket_notification resource — all Lambda
+# triggers must be declared together or the last apply silently overwrites the rest.
+resource "aws_s3_bucket_notification" "bucket_triggers" {
   bucket = aws_s3_bucket.circulation.id
 
   lambda_function {
@@ -74,29 +87,22 @@ resource "aws_s3_bucket_notification" "circulation_trigger" {
     filter_suffix       = ".xlsm"
   }
 
-  depends_on = [aws_lambda_permission.s3_invoke_circulation]
-}
-
-# ── S3 → Programming Lambda trigger ──────────────────────────────────────────
-
-resource "aws_lambda_permission" "s3_invoke_programming" {
-  statement_id   = "AllowS3InvokeProgramming"
-  action         = "lambda:InvokeFunction"
-  function_name  = aws_lambda_function.programmingAPI.function_name
-  principal      = "s3.amazonaws.com"
-  source_arn     = aws_s3_bucket.circulation.arn
-  source_account = data.aws_caller_identity.current.account_id
-}
-
-resource "aws_s3_bucket_notification" "programming_trigger" {
-  bucket = aws_s3_bucket.circulation.id
-
   lambda_function {
-    lambda_function_arn = aws_lambda_function.programmingAPI.arn
+    lambda_function_arn = aws_lambda_function.programmingDataParser.arn
     events              = ["s3:ObjectCreated:*"]
     filter_prefix       = "uploads/programming/"
     filter_suffix       = ".xlsx"
   }
 
-  depends_on = [aws_lambda_permission.s3_invoke_programming]
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.programmingDataParser.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "uploads/programming/"
+    filter_suffix       = ".pdf"
+  }
+
+  depends_on = [
+    aws_lambda_permission.s3_invoke_circulation,
+    aws_lambda_permission.s3_invoke_programming,
+  ]
 }
