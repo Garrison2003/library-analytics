@@ -121,8 +121,8 @@ jobs:
       - name: Build Time Series Lambda Layer
         run: |
           mkdir -p /tmp/ts_layer/python
-          pip install numpy pandas matplotlib openpyxl \
-            -t /tmp/ts_layer/python --quiet
+
+          pip install matplotlib -t /tmp/ts_layer/python --quiet
           cd /tmp/ts_layer && zip -r "$GITHUB_WORKSPACE/TF/time_series_layer.zip" python
 
       - name: Build Circulation Lambda
