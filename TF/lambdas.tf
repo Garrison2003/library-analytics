@@ -2,6 +2,7 @@
 
 # Layer: matplotlib only — numpy/pandas come from the AWS-managed AWSSDKPandas layer,
 # openpyxl comes from the shared openpyxl layer.
+
 # Built by the CI "Build Time Series Lambda Layer" step; zip placed at TF/time_series_layer.zip
 resource "aws_lambda_layer_version" "time_series_deps" {
   layer_name          = "${var.project_name}-time-series-deps"
@@ -25,6 +26,7 @@ resource "aws_lambda_function" "time_series_lambda" {
     aws_lambda_layer_version.openpyxl.arn,
     aws_lambda_layer_version.time_series_deps.arn,
   ]
+
 
   environment {
     variables = {
