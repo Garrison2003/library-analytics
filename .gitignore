@@ -15,6 +15,7 @@ __pycache__/
 # Claude Code local settings (per-developer, not shared)
 .claude/settings.local.json
 
+<<<<<<< Updated upstream
 # VS Code local settings (per-developer, not shared)
 .vscode/
 
@@ -31,3 +32,7 @@ dist/
 # Logs
 *.log
 npm-debug.log*
+=======
+# VSCode local settings
+.vscode/
+>>>>>>> Stashed changes

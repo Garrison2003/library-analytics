@@ -10,7 +10,9 @@
       "justMyCode": true,
       "env": {
         "AWS_REGION": "us-east-1",
-        "AWS_PROFILE": "default"
+        "AWS_PROFILE": "default",
+        "CIRCULATION_BUCKET": "library-analytics-circulation-dev-688567267460",
+        "CIRCULATION_PREFIX": "uploads/circulation/"
       }
     }
   ]

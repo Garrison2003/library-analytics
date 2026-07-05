@@ -6,8 +6,14 @@ resource "aws_lambda_function" "time_series_lambda" {
   role          = aws_iam_role.time_series_lambda.arn
   handler       = "index.handler"
   runtime       = "python3.12"
-
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+
+   environment {
+    variables = {
+      CIRULATION_BUCKET = aws_s3_bucket.circulation.id
+      CIRCULATION_FILE_KEY = var.circulation_upload_prefix
+    }
+  }
 }
 
 # ── Circulation Lambda ───────────────────────────────────────────────────────

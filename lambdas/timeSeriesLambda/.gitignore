@@ -11,3 +11,4 @@ build/
 *.zip
 venv/
 .venv/
+*.vscode/
