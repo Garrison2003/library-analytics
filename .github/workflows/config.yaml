@@ -118,15 +118,12 @@ jobs:
       # ── Lambda builds ───────────────────────────────────────────────────────
       # Zips are placed inside TF/ so they are available during terraform apply.
 
-      - name: Build Time Series Lambda
+      - name: Build Time Series Lambda Layer
         run: |
-          cd lambdas/timeSeriesLambda
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt -t .
-          fi
-          zip -r ../../TF/lambda_function_payload.zip . \
-            -x "*.git*" -x "*__pycache__*" -x "*.pyc" \
-            -x "node_modules/*" -x "*.ts" -x "tests/*"
+          mkdir -p /tmp/ts_layer/python
+          pip install numpy pandas matplotlib openpyxl \
+            -t /tmp/ts_layer/python --quiet
+          cd /tmp/ts_layer && zip -r "$GITHUB_WORKSPACE/TF/time_series_layer.zip" python
 
       - name: Build Circulation Lambda
         run: |
