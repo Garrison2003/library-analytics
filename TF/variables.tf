@@ -90,7 +90,13 @@ variable "programming_lambda_timeout" {
 variable "aws_sdk_pandas_layer_arn" {
   description = "ARN of the AWS-managed AWSSDKPandas-Python312 layer (provides numpy + pandas)"
   type        = string
-  default     = "arn:aws:lambda:us-east-1:336392948345:layer:AWSSDKPandas-Python312:13"
+  default     = "arn:aws:lambda:us-east-1:336392948345:layer:AWSSDKPandas-Python312:27"
+}
+
+variable "matplotlib_layer_arn" {
+  description = "ARN of the manually-published matplotlib Lambda layer (python3.12)"
+  type        = string
+  default     = "arn:aws:lambda:us-east-1:688567267460:layer:library-analytics-matplotlib:1"
 }
 
 variable "matplotlib_layer_arn" {

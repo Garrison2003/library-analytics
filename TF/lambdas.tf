@@ -11,7 +11,6 @@ resource "aws_lambda_function" "time_series_lambda" {
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   layers = [
     var.aws_sdk_pandas_layer_arn,
-    var.openpyxl_layer_arn,
     var.matplotlib_layer_arn,
   ]
 
@@ -34,6 +33,10 @@ resource "aws_lambda_layer_version" "openpyxl" {
   compatible_runtimes = ["python3.12"]
   description         = "openpyxl for Excel .xlsm parsing"
   source_code_hash    = filebase64sha256("openpyxl_layer.zip")
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Function
