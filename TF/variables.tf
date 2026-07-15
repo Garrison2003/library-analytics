@@ -91,6 +91,7 @@ variable "aws_sdk_pandas_layer_arn" {
   description = "ARN of the AWS-managed AWSSDKPandas-Python312 layer (provides numpy + pandas)"
   type        = string
   default     = "arn:aws:lambda:us-east-1:336392948345:layer:AWSSDKPandas-Python312:27"
+  dev
 }
 
 variable "matplotlib_layer_arn" {
