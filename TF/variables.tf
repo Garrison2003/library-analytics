@@ -99,18 +99,6 @@ variable "matplotlib_layer_arn" {
   default     = "arn:aws:lambda:us-east-1:688567267460:layer:library-analytics-matplotlib:1"
 }
 
-variable "matplotlib_layer_arn" {
-  description = "ARN of the manually-published matplotlib Lambda layer (python3.12)"
-  type        = string
-  default     = "arn:aws:lambda:us-east-1:688567267460:layer:library-analytics-matplotlib:1"
-}
-
-variable "openpyxl_layer_arn" {
-  description = "ARN of the openpyxl Lambda layer (python3.12)"
-  type        = string
-  default     = "arn:aws:lambda:us-east-1:688567267460:layer:library-analytics-openpyxl:53"
-}
-
 variable "circulation_s3_bucket_name" {
   description = "s3 circulation bucket"
   type        = string
