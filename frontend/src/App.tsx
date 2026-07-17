@@ -29,6 +29,7 @@ const auth0Audience = import.meta.env.VITE_AUTH0_AUDIENCE as string | undefined;
 function AppContent() {
   const { isLoading, isAuthenticated, error, user, getAccessTokenSilently } = useAuth0();
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
+  const [sharedBranch, setSharedBranch] = useState<string>("");
 
   // Must be set in render (not useEffect) so children's useEffect hooks see it on first mount.
   if (isAuthenticated) {
@@ -82,12 +83,12 @@ function AppContent() {
           <DailyAnalytics onBackHome={() => handleTabChange("dashboard")} />
         );
       case "programming":
-        return <Programming />;
+        return <Programming initialBranch={sharedBranch} />;
       case "upload":
         return <Upload onBackHome={() => handleTabChange("dashboard")} />;
       case "dashboard":
       default:
-        return <Homepage />;
+        return <Homepage onBranchChange={setSharedBranch} />;
     }
   };
 
