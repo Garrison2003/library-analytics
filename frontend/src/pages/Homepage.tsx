@@ -17,7 +17,11 @@ import QuestionsSection from "../components/QuestionsSection";
  * - Programming charts (2 bar charts - In-Person Attendance & Total Programs)
  * - Questions input for MCP server
  */
-const Homepage: React.FC = () => {
+interface HomepageProps {
+  onBranchChange?: (branch: string) => void;
+}
+
+const Homepage: React.FC<HomepageProps> = ({ onBranchChange }) => {
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [branches, setBranches] = useState<string[]>([]);
   const [isLoadingBranches, setIsLoadingBranches] = useState(true);
@@ -32,9 +36,12 @@ const Homepage: React.FC = () => {
         if (json.success && json.data?.branches) {
           const branchList = json.data.branches;
           setBranches(branchList);
-          setSelectedBranch(branchList.length > 0 ? branchList[0] : "System");
+          const initial = branchList.length > 0 ? branchList[0] : "System";
+          setSelectedBranch(initial);
+          onBranchChange?.(initial);
         } else {
           setSelectedBranch("System");
+          onBranchChange?.("System");
         }
       } catch (error) {
         console.error("Error fetching branches:", error);
@@ -83,7 +90,7 @@ const Homepage: React.FC = () => {
           <BranchSelector
             branches={branches}
             selectedBranch={selectedBranch}
-            onBranchChange={setSelectedBranch}
+            onBranchChange={(b) => { setSelectedBranch(b); onBranchChange?.(b); }}
             isLoading={isLoadingBranches}
           />
         </div>
