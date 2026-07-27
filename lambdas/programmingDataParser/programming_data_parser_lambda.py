@@ -109,6 +109,7 @@ BRANCH_NAME_TO_CODE = {
     "sugar": "SGC",
     "spangler": "SPA",
     "teen loft": "TEL",
+    "loft": "TEL",
     "southpark": "SPK",
     "steele": "STC",
     "university": "UCR",

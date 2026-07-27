@@ -136,7 +136,7 @@ async function validateCirculationFile(file: File): Promise<ValidationResult> {
  */
 const KNOWN_BRANCH_NAMES = [
   "imaginon", "main", "plaza", "northlake", "charlotte",
-  "spangler", "carmel", "community", "east", "west",
+  "spangler", "carmel", "community", "east", "west", "loft",
 ];
 
 async function validateProgramFile(file: File): Promise<ValidationResult> {
