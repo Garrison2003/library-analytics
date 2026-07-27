@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import re
+from collections import Counter
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
@@ -352,12 +353,19 @@ def parse_pdf_report(file_bytes: bytes) -> Optional[Dict[str, Any]]:
         month_match = re.search(
             r"Program Date:\s+([A-Za-z]+)\s+(\d{4})", full_text, re.IGNORECASE
         )
-        if not month_match:
-            logger.error("PDF: could not find month/year in filter criteria")
-            return None
-
-        month_abbr = month_match.group(1).upper()[:3]
-        year = int(month_match.group(2))
+        if month_match:
+            month_abbr = month_match.group(1).upper()[:3]
+            year = int(month_match.group(2))
+        else:
+            # Some ILS exports omit the "Filter Criteria Applied" line entirely.
+            # Fall back to the most common "DD-Mon-YYYY" date among the report rows.
+            row_dates = re.findall(r"\d{2}-([A-Za-z]{3})-(\d{4})", full_text)
+            if not row_dates:
+                logger.error("PDF: could not find month/year in filter criteria")
+                return None
+            month_abbr, year_str = Counter(row_dates).most_common(1)[0][0]
+            month_abbr = month_abbr.upper()
+            year = int(year_str)
         month_num = MONTH_ABBR_TO_NUM.get(month_abbr)
         if not month_num:
             logger.error("PDF: unknown month abbreviation '%s'", month_abbr)
