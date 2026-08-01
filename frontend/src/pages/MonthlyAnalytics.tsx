@@ -1,6 +1,6 @@
 // src/pages/MonthlyAnalytics.tsx
  
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { apiClient } from "../services/api";
 import BranchSelector from "../components/BranchSelector";
