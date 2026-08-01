@@ -11,6 +11,7 @@ import type {
   ProgramSessionsResponse,
   FacilitatorsResponse,
   ProgramNamesResponse,
+  TimeSeriesResponse,
 } from "../types/index";
 
 class APIService {
@@ -128,6 +129,20 @@ class APIService {
 
   async getDailyAnalytics(date: string): Promise<APIResponse<DailyAnalytics>> {
     return this.request<DailyAnalytics>(`/analytics/daily?date=${date}`);
+  }
+
+  /**
+   * Get multi-year time series (overlay, annual print/non-print, chronological
+   * timeline, YoY % change) for a department, including a forecast for any
+   * unreported trailing months in the current fiscal year.
+   */
+  async getTimeSeriesData(
+    department: string,
+  ): Promise<APIResponse<TimeSeriesResponse>> {
+    const params = new URLSearchParams({ department });
+    return this.request<TimeSeriesResponse>(
+      `/timeseries?${params.toString()}`,
+    );
   }
 
   async uploadFile(

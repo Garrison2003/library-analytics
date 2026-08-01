@@ -537,3 +537,55 @@ export interface FormState<T> {
   isValid: boolean;
   isSubmitting: boolean;
 }
+
+
+// ============================================================================
+// TIME SERIES TYPES 
+// ============================================================================
+ 
+export interface TimeSeriesOverlayPoint {
+  month: string; // "Jul", "Aug", ...
+  total: number;
+  forecast: boolean;
+  seLow?: number;
+  seHigh?: number;
+}
+ 
+export interface TimeSeriesAnnualPoint {
+  fy: string; // "FY2025"
+  print: number;
+  nonprint: number;
+  forecastPrint: number;
+  forecastNonprint: number;
+}
+ 
+export interface TimeSeriesTimelinePoint {
+  index: number;
+  fy: string;
+  month: string;
+  total: number;
+  forecast: boolean;
+  seLow?: number;
+  seHigh?: number;
+}
+ 
+export interface TimeSeriesYoyPoint {
+  month: string;
+  pctChange: number;
+  forecast: boolean;
+}
+ 
+export interface TimeSeriesResponse {
+  department: string;
+  fyLabels: string[]; // ["FY2023", "FY2024", "FY2025", "FY2026"]
+  monthLabels: string[]; // ["Jul", ..., "Jun"]
+  latestFy: string;
+  lastActualIndex: number; // index (0-11) of the last reported month in latestFy, -1 if none
+  hasForecast: boolean;
+  series: {
+    overlay: Record<string, TimeSeriesOverlayPoint[]>; // keyed by FY label
+    annual: TimeSeriesAnnualPoint[];
+    timeline: TimeSeriesTimelinePoint[];
+    yoy: Record<string, TimeSeriesYoyPoint[]>; // keyed by "FY2025 vs FY2024"
+  };
+}
