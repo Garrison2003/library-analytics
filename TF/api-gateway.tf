@@ -120,6 +120,99 @@ resource "aws_lambda_permission" "api_gateway_circulation" {
   source_arn    = "${aws_api_gateway_rest_api.circulation.execution_arn}/*/*"
 }
 
+# ── /timeseries resource ─────────────────────────────────────────────────────
+
+resource "aws_api_gateway_resource" "timeseries" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  parent_id   = aws_api_gateway_rest_api.circulation.root_resource_id
+  path_part   = "timeseries"
+}
+
+# ── GET /timeseries?department={name} ────────────────────────────────────────
+
+resource "aws_api_gateway_method" "get_timeseries" {
+  rest_api_id   = aws_api_gateway_rest_api.circulation.id
+  resource_id   = aws_api_gateway_resource.timeseries.id
+  http_method   = "GET"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.jwt.id
+
+  request_parameters = {
+    "method.request.querystring.department" = true
+  }
+}
+
+resource "aws_api_gateway_integration" "get_timeseries" {
+  rest_api_id             = aws_api_gateway_rest_api.circulation.id
+  resource_id             = aws_api_gateway_resource.timeseries.id
+  http_method             = aws_api_gateway_method.get_timeseries.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.time_series_lambda.invoke_arn
+}
+
+# ── OPTIONS /timeseries (CORS preflight) ─────────────────────────────────────
+
+resource "aws_api_gateway_method" "options_timeseries" {
+  rest_api_id   = aws_api_gateway_rest_api.circulation.id
+  resource_id   = aws_api_gateway_resource.timeseries.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_timeseries" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.timeseries.id
+  http_method = aws_api_gateway_method.options_timeseries.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+resource "aws_api_gateway_method_response" "options_timeseries_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.timeseries.id
+  http_method = aws_api_gateway_method.options_timeseries.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_timeseries_200" {
+  rest_api_id = aws_api_gateway_rest_api.circulation.id
+  resource_id = aws_api_gateway_resource.timeseries.id
+  http_method = aws_api_gateway_method.options_timeseries.http_method
+  status_code = aws_api_gateway_method_response.options_timeseries_200.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'${var.cors_origin}'"
+  }
+
+  depends_on = [aws_api_gateway_integration.options_timeseries]
+}
+
+# ── Lambda invoke permission for API Gateway (Time Series) ───────────────────
+
+resource "aws_lambda_permission" "api_gateway_timeseries" {
+  statement_id  = "AllowAPIGatewayInvokeTimeSeries"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.time_series_lambda.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.circulation.execution_arn}/*/*"
+}
+
 # ── /programming resource ───────────────────────────────────────────────────────
 
 resource "aws_api_gateway_resource" "programming" {
@@ -221,6 +314,11 @@ resource "aws_api_gateway_deployment" "circulation" {
       aws_api_gateway_integration.get_circulation.id,
       aws_api_gateway_method.options_circulation.id,
       aws_api_gateway_integration.options_circulation.id,
+      aws_api_gateway_resource.timeseries.id,
+      aws_api_gateway_method.get_timeseries.id,
+      aws_api_gateway_integration.get_timeseries.id,
+      aws_api_gateway_method.options_timeseries.id,
+      aws_api_gateway_integration.options_timeseries.id,
       aws_api_gateway_resource.programming.id,
       aws_api_gateway_method.get_programming.id,
       aws_api_gateway_integration.get_programming.id,
@@ -257,6 +355,7 @@ resource "aws_api_gateway_deployment" "circulation" {
       aws_api_gateway_integration.options_programming_facilitators.id,
       aws_lambda_function.programmingHistoryAPI.invoke_arn,
       aws_lambda_function.circulation_lambda.invoke_arn,
+      aws_lambda_function.time_series_lambda.invoke_arn,
       aws_lambda_function.upload_handler.invoke_arn,
       aws_lambda_function.api_authorizer.invoke_arn,
       aws_api_gateway_authorizer.jwt.id,
@@ -279,6 +378,8 @@ resource "aws_api_gateway_deployment" "circulation" {
   depends_on = [
     aws_api_gateway_integration.get_circulation,
     aws_api_gateway_integration.options_circulation,
+    aws_api_gateway_integration.get_timeseries,
+    aws_api_gateway_integration.options_timeseries,
     aws_api_gateway_integration.get_programming,
     aws_api_gateway_integration.options_programming,
     aws_api_gateway_integration.upload_post_lambda,
