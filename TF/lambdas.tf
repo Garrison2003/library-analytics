@@ -10,8 +10,7 @@ resource "aws_lambda_function" "time_series_lambda" {
   timeout          = 120
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   layers = [
-    var.aws_sdk_pandas_layer_arn,
-    var.matplotlib_layer_arn,
+    var.time_series_layer_arn,
   ]
 
   environment {

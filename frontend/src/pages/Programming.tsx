@@ -7,8 +7,12 @@ import ProgrammingQuery from "../components/ProgrammingQuery";
 import ProgrammingStatsTable from "../components/ProgrammingStatsTable";
 import QuestionsSection from "../components/QuestionsSection";
 
-const Programming: React.FC = () => {
-  const [selectedBranch, setSelectedBranch] = useState<string>("");
+interface ProgrammingProps {
+  initialBranch?: string;
+}
+
+const Programming: React.FC<ProgrammingProps> = ({ initialBranch = "" }) => {
+  const [selectedBranch, setSelectedBranch] = useState<string>(initialBranch);
   const [branches, setBranches] = useState<string[]>([]);
   const [isLoadingBranches, setIsLoadingBranches] = useState(true);
   const [isLoadingQuestion, setIsLoadingQuestion] = useState<boolean>(false);
@@ -21,7 +25,10 @@ const Programming: React.FC = () => {
         if (json.success && json.data?.branches) {
           const branchList = json.data.branches;
           setBranches(branchList);
-          setSelectedBranch(branchList.length > 0 ? branchList[0] : "System");
+          const preferred = initialBranch && branchList.includes(initialBranch)
+            ? initialBranch
+            : (branchList.length > 0 ? branchList[0] : "System");
+          setSelectedBranch(preferred);
         } else {
           setSelectedBranch("System");
         }
