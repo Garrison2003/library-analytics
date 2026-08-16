@@ -8,6 +8,8 @@ import type { TimeSeriesResponse } from "../types/index";
  
 interface MonthlyAnalyticsProps {
   onBackHome: () => void;
+  initialBranch?: string;
+  onBranchChange?: (branch: string) => void;
 }
  
 // ── Shared chart helpers (same conventions as CirculationTrends.tsx) ─────────
@@ -418,9 +420,9 @@ function SummaryCards({ data }: { data: TimeSeriesResponse }) {
  
 // ── Page ─────────────────────────────────────────────────────────────────────
  
-export default function MonthlyAnalytics({ onBackHome }: MonthlyAnalyticsProps) {
+export default function MonthlyAnalytics({ onBackHome, initialBranch = "", onBranchChange }: MonthlyAnalyticsProps) {
   const [branches, setBranches] = useState<string[]>([]);
-  const [department, setDepartment] = useState<string>("");
+  const [department, setDepartment] = useState<string>(initialBranch);
   const [data, setData] = useState<TimeSeriesResponse | null>(null);
   const [isLoadingBranches, setIsLoadingBranches] = useState(true);
   const [isLoadingSeries, setIsLoadingSeries] = useState(false);
@@ -434,7 +436,10 @@ export default function MonthlyAnalytics({ onBackHome }: MonthlyAnalyticsProps) 
         const res = await apiClient.getCirculationData();
         const list = (res.data as any)?.branches ?? [];
         setBranches(list);
-        if (list.length > 0) setDepartment(list[0]);
+        const preferred = initialBranch && list.includes(initialBranch)
+          ? initialBranch
+          : (list.length > 0 ? list[0] : "");
+        if (preferred) setDepartment(preferred);
       } catch (err) {
         console.error("Failed to load branch list:", err);
       } finally {
@@ -490,7 +495,7 @@ export default function MonthlyAnalytics({ onBackHome }: MonthlyAnalyticsProps) 
         <BranchSelector
           branches={branches}
           selectedBranch={department || "Loading..."}
-          onBranchChange={setDepartment}
+          onBranchChange={(b) => { setDepartment(b); onBranchChange?.(b); }}
           isLoading={isLoadingBranches}
         />
       </div>
