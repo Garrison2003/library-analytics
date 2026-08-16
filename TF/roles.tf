@@ -23,6 +23,29 @@ resource "aws_iam_role_policy_attachment" "time_series_lambda_logs" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+resource "aws_iam_role_policy" "time_series_lambda" {
+  name = "${var.project_name}-time-series-policy"
+  role = aws_iam_role.time_series_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "S3ListBucket"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = aws_s3_bucket.circulation.arn
+      },
+      {
+        Sid      = "S3ReadUploads"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "${aws_s3_bucket.circulation.arn}/${var.circulation_upload_prefix}*"
+      }
+    ]
+  })
+}
+
 
 # ── Circulation Lambda role ──────────────────────────────────────────────────
 
