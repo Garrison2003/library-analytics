@@ -76,14 +76,18 @@ function AppContent() {
     switch (activeTab) {
       case "monthly":
         return (
-          <MonthlyAnalytics onBackHome={() => handleTabChange("dashboard")} />
+          <MonthlyAnalytics
+            onBackHome={() => handleTabChange("dashboard")}
+            initialBranch={sharedBranch}
+            onBranchChange={setSharedBranch}
+          />
         );
       case "daily":
         return (
           <DailyAnalytics onBackHome={() => handleTabChange("dashboard")} />
         );
       case "programming":
-        return <Programming initialBranch={sharedBranch} />;
+        return <Programming initialBranch={sharedBranch} onBranchChange={setSharedBranch} />;
       case "upload":
         return <Upload onBackHome={() => handleTabChange("dashboard")} />;
       case "dashboard":
