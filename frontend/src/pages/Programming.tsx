@@ -9,9 +9,10 @@ import QuestionsSection from "../components/QuestionsSection";
 
 interface ProgrammingProps {
   initialBranch?: string;
+  onBranchChange?: (branch: string) => void;
 }
 
-const Programming: React.FC<ProgrammingProps> = ({ initialBranch = "" }) => {
+const Programming: React.FC<ProgrammingProps> = ({ initialBranch = "", onBranchChange }) => {
   const [selectedBranch, setSelectedBranch] = useState<string>(initialBranch);
   const [branches, setBranches] = useState<string[]>([]);
   const [isLoadingBranches, setIsLoadingBranches] = useState(true);
@@ -29,8 +30,10 @@ const Programming: React.FC<ProgrammingProps> = ({ initialBranch = "" }) => {
             ? initialBranch
             : (branchList.length > 0 ? branchList[0] : "System");
           setSelectedBranch(preferred);
+          onBranchChange?.(preferred);
         } else {
           setSelectedBranch("System");
+          onBranchChange?.("System");
         }
       } catch (error) {
         console.error("Error fetching branches:", error);
@@ -76,7 +79,7 @@ const Programming: React.FC<ProgrammingProps> = ({ initialBranch = "" }) => {
           <BranchSelector
             branches={branches}
             selectedBranch={selectedBranch}
-            onBranchChange={setSelectedBranch}
+            onBranchChange={(b) => { setSelectedBranch(b); onBranchChange?.(b); }}
             isLoading={isLoadingBranches}
           />
         </div>
