@@ -24,6 +24,8 @@ Response: {success, data, error, timestamp, requestId} envelope, where
 
 """
  
+import hashlib
+
 import io
 
 import json
@@ -37,17 +39,19 @@ import uuid
 from datetime import datetime, timezone
 
 from typing import Any, Dict
- 
+
 import boto3
 
 import numpy as np
 
 import pandas as pd
- 
+
+from botocore.exceptions import ClientError
+
 logger = logging.getLogger()
 
 logger.setLevel(logging.INFO)
- 
+
 s3 = boto3.client("s3")
  
 # Fiscal year order: July → June
@@ -75,8 +79,10 @@ COL_NONPRINT = 21  # TOTAL NONPRINT
 BUCKET = os.environ.get("CIRCULATION_BUCKET", "")
 
 S3_PREFIX = os.environ.get("CIRCULATION_PREFIX", "circulation/")
- 
- 
+
+CACHE_KEY = os.environ.get("TIMESERIES_CACHE_KEY", "processed/timeseries_cache.json")
+
+
 # ── S3 / Excel loading ───────────────────────────────────────────────────────
  
 def list_xlsm_files(bucket: str, prefix: str) -> list[str]:
@@ -96,8 +102,54 @@ def list_xlsm_files(bucket: str, prefix: str) -> list[str]:
                 keys.append(obj["Key"])
 
     return sorted(keys)
- 
- 
+
+
+def list_xlsm_objects(bucket: str, prefix: str) -> list[dict]:
+    """Return sorted {key, etag} metadata for every .xlsm file under prefix.
+
+    A plain listing call — no file bodies are downloaded — so this is cheap
+    enough to call on every request just to fingerprint the source data.
+    """
+    paginator = s3.get_paginator("list_objects_v2")
+    objects = []
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            if obj["Key"].endswith(".xlsm"):
+                objects.append({"key": obj["Key"], "etag": obj["ETag"]})
+    return sorted(objects, key=lambda o: o["key"])
+
+
+def _source_signature(objects: list[dict]) -> str:
+    """Fingerprint of the current source .xlsm files (order-independent)."""
+    raw = "|".join(f'{o["key"]}:{o["etag"]}' for o in sorted(objects, key=lambda o: o["key"]))
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _read_cache(bucket: str, key: str) -> dict:
+    try:
+        body = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+        return json.loads(body)
+    except ClientError as exc:
+        if exc.response["Error"]["Code"] not in ("NoSuchKey", "404"):
+            logger.warning("Failed to read timeseries cache: %s", exc)
+        return {}
+    except Exception:
+        logger.exception("Failed to read/parse timeseries cache")
+        return {}
+
+
+def _write_cache(bucket: str, key: str, cache: dict) -> None:
+    try:
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=json.dumps(cache),
+            ContentType="application/json",
+        )
+    except Exception:
+        logger.exception("Failed to write timeseries cache")
+
+
 def download_s3_file(bucket: str, key: str) -> io.BytesIO:
 
     response = s3.get_object(Bucket=bucket, Key=key)
@@ -547,7 +599,27 @@ def handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     if not BUCKET:
 
         return _api_err(500, "CONFIG_ERROR", "CIRCULATION_BUCKET not set")
- 
+
+    # Cache: fingerprint the source .xlsm files and reuse whatever was
+    # computed for this department the first time a request came in against
+    # that fingerprint. Source data only changes once a month, when a new
+    # file lands and circulationLambda reprocesses it — so branch switches
+    # between uploads should hit this cache instead of re-parsing every FY
+    # workbook on every request.
+    cache: dict = {}
+    signature: str | None = None
+    try:
+        objects = list_xlsm_objects(BUCKET, S3_PREFIX)
+        if objects:
+            signature = _source_signature(objects)
+            cache = _read_cache(BUCKET, CACHE_KEY)
+            if cache.get("sourceSignature") == signature:
+                cached_payload = cache.get("departments", {}).get(department)
+                if cached_payload is not None:
+                    return _api_ok(cached_payload)
+    except Exception:
+        logger.exception("Failed to check timeseries cache; falling back to full compute")
+
     try:
 
         calc = compute_time_series(department)
@@ -571,6 +643,12 @@ def handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         return _api_err(500, "INTERNAL_ERROR", str(exc))
  
     payload = build_json_payload(calc)
+
+    if signature:
+        if cache.get("sourceSignature") != signature:
+            cache = {"sourceSignature": signature, "departments": {}}
+        cache.setdefault("departments", {})[department] = payload
+        _write_cache(BUCKET, CACHE_KEY, cache)
 
     return _api_ok(payload)
  
