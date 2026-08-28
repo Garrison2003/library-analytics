@@ -92,7 +92,7 @@ function AppContent() {
         return <Upload onBackHome={() => handleTabChange("dashboard")} />;
       case "dashboard":
       default:
-        return <Homepage onBranchChange={setSharedBranch} />;
+        return <Homepage initialBranch={sharedBranch} onBranchChange={setSharedBranch} />;
     }
   };
 
