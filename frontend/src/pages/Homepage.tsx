@@ -18,11 +18,12 @@ import QuestionsSection from "../components/QuestionsSection";
  * - Questions input for MCP server
  */
 interface HomepageProps {
+  initialBranch?: string;
   onBranchChange?: (branch: string) => void;
 }
 
-const Homepage: React.FC<HomepageProps> = ({ onBranchChange }) => {
-  const [selectedBranch, setSelectedBranch] = useState<string>("");
+const Homepage: React.FC<HomepageProps> = ({ initialBranch = "", onBranchChange }) => {
+  const [selectedBranch, setSelectedBranch] = useState<string>(initialBranch);
   const [branches, setBranches] = useState<string[]>([]);
   const [isLoadingBranches, setIsLoadingBranches] = useState(true);
   const [isLoadingQuestion, setIsLoadingQuestion] = useState<boolean>(false);
@@ -36,9 +37,11 @@ const Homepage: React.FC<HomepageProps> = ({ onBranchChange }) => {
         if (json.success && json.data?.branches) {
           const branchList = json.data.branches;
           setBranches(branchList);
-          const initial = branchList.length > 0 ? branchList[0] : "System";
-          setSelectedBranch(initial);
-          onBranchChange?.(initial);
+          const preferred = initialBranch && branchList.includes(initialBranch)
+            ? initialBranch
+            : (branchList.length > 0 ? branchList[0] : "System");
+          setSelectedBranch(preferred);
+          onBranchChange?.(preferred);
         } else {
           setSelectedBranch("System");
           onBranchChange?.("System");
