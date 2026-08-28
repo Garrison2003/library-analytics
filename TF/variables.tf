@@ -53,6 +53,12 @@ variable "circulation_processed_key" {
   default     = "processed/circulation_data.json"
 }
 
+variable "timeseries_cache_key" {
+  description = "S3 key where the per-department time series cache is written"
+  type        = string
+  default     = "processed/timeseries_cache.json"
+}
+
 variable "circulation_lambda_memory" {
   description = "Memory (MB) for the circulation Lambda"
   type        = number
