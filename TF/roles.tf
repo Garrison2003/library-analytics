@@ -41,6 +41,18 @@ resource "aws_iam_role_policy" "time_series_lambda" {
         Effect   = "Allow"
         Action   = ["s3:GetObject"]
         Resource = "${aws_s3_bucket.circulation.arn}/${var.circulation_upload_prefix}*"
+      },
+      {
+        Sid      = "S3ReadCache"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "${aws_s3_bucket.circulation.arn}/${var.timeseries_cache_key}"
+      },
+      {
+        Sid      = "S3WriteCache"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = "${aws_s3_bucket.circulation.arn}/${var.timeseries_cache_key}"
       }
     ]
   })

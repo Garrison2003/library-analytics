@@ -16,8 +16,9 @@ resource "aws_lambda_function" "time_series_lambda" {
 
   environment {
     variables = {
-      CIRCULATION_BUCKET = aws_s3_bucket.circulation.id
-      CIRCULATION_PREFIX = var.circulation_upload_prefix
+      CIRCULATION_BUCKET   = aws_s3_bucket.circulation.id
+      CIRCULATION_PREFIX   = var.circulation_upload_prefix
+      TIMESERIES_CACHE_KEY = var.timeseries_cache_key
     }
   }
 }
